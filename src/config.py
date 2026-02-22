@@ -17,7 +17,7 @@ def load_config(config_path: str | None = None) -> dict:
         Configuration dictionary.
     """
     if config_path is None:
-        project_root = Path(__file__).parent.parent.parent
+        project_root = Path(__file__).parent.parent
         config_path = project_root / "config" / "config.yaml"
 
     with open(config_path, "r") as f:

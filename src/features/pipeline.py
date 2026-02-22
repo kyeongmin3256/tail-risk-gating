@@ -18,7 +18,7 @@ import logging
 import pandas as pd
 
 from src.features.calendar import build_calendar_features
-from src.features.market_structure import build_market_structure_features
+from src.features.market_structure import credit_spread_proxy, dollar_momentum, yield_curve_slope
 from src.features.momentum import build_momentum_features
 from src.features.volatility import build_volatility_features
 
@@ -114,15 +114,17 @@ class FeaturePipeline:
             logger.warning("  Skipping some volatility features (missing data).")
 
         # 2. Market structure features
-        if all(s is not None for s in [hyg_close, ief_close, treasury_2y, treasury_10y, dxy_close]):
-            mkt_features = build_market_structure_features(
-                hyg_close=hyg_close,
-                ief_close=ief_close,
-                treasury_2y=treasury_2y,
-                treasury_10y=treasury_10y,
-                dxy_close=dxy_close,
-                credit_window=self.feature_config["credit_spread_window"],
+        if all(s is not None for s in [hyg_close, ief_close, dxy_close]):
+            mkt_features = pd.DataFrame()
+            mkt_features["credit_spread"] = credit_spread_proxy(
+                hyg_close, ief_close, self.feature_config["credit_spread_window"]
             )
+            dxy_mom = dollar_momentum(dxy_close)
+            mkt_features = mkt_features.join(dxy_mom)
+            if treasury_2y is not None and treasury_10y is not None:
+                mkt_features["yield_curve"] = yield_curve_slope(treasury_2y, treasury_10y)
+            else:
+                logger.warning("  Treasury data unavailable — skipping yield curve feature.")
             all_features.append(mkt_features)
             logger.info(f"  Market structure features: {mkt_features.shape[1]} columns")
         else:

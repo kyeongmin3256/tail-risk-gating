@@ -26,8 +26,9 @@ def credit_spread_proxy(
     Returns:
         Rolling return difference (HYG - IEF). Negative = stress.
     """
-    hyg_ret = np.log(hyg_close / hyg_close.shift(1))
-    ief_ret = np.log(ief_close / ief_close.shift(1))
+    hyg_aligned, ief_aligned = hyg_close.align(ief_close, join="inner")
+    hyg_ret = np.log(hyg_aligned / hyg_aligned.shift(1))
+    ief_ret = np.log(ief_aligned / ief_aligned.shift(1))
     return (hyg_ret - ief_ret).rolling(window=window).sum()
 
 

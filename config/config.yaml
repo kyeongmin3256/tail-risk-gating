@@ -49,7 +49,7 @@ strategy:
   name: "short_straddle_spy"
 
   # Default loss threshold (user can override)
-  default_threshold: -0.15  # -15%
+  default_threshold: -0.04  # -4%
 
   # Default time horizon in trading days
   default_horizon: 5

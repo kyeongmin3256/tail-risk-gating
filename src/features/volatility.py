@@ -49,7 +49,8 @@ def iv_rv_spread(vix: pd.Series, rvol_20d: pd.Series) -> pd.Series:
         Series of IV-RV spread values.
     """
     # VIX is in percentage points (e.g., 20 = 20%), rvol is decimal (e.g., 0.20)
-    return vix - (rvol_20d * 100)
+    vix_aligned, rvol_aligned = vix.align(rvol_20d, join="inner")
+    return vix_aligned - (rvol_aligned * 100)
 
 
 def vix_term_structure(
@@ -69,8 +70,9 @@ def vix_term_structure(
         slope: (VIX3M - VIX) / VIX — positive = normal, negative = inverted
         inversion_flag: 1 if inverted, 0 otherwise
     """
-    slope = (vix3m - vix) / vix
-    inversion = (vix > vix3m).astype(int)
+    vix_aligned, vix3m_aligned = vix.align(vix3m, join="inner")
+    slope = (vix3m_aligned - vix_aligned) / vix_aligned
+    inversion = (vix_aligned > vix3m_aligned).astype(int)
     return slope, inversion
 
 

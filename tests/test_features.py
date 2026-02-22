@@ -120,9 +120,9 @@ class TestCalendarFeatures:
         # Jan 15 should be earnings season
         dates = pd.DatetimeIndex(["2020-01-15", "2020-02-15", "2020-04-20"])
         result = earnings_season_flag(dates)
-        assert result.iloc[0] == 1  # Jan 15 = earnings season
-        assert result.iloc[1] == 0  # Feb 15 = not earnings season
-        assert result.iloc[2] == 1  # Apr 20 = earnings season
+        assert result[0] == 1  # Jan 15 = earnings season
+        assert result[1] == 0  # Feb 15 = not earnings season
+        assert result[2] == 1  # Apr 20 = earnings season
 
 
 # --- No-Leakage Tests (MOST IMPORTANT) ---
