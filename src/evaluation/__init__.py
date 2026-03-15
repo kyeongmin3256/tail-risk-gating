@@ -1,1 +1,1 @@
-"""Evaluation module."""
+"""Evaluation module — metrics, calibration curves, backtesting."""
