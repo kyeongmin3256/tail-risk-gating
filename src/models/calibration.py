@@ -17,7 +17,6 @@ Usage:
 import logging
 
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 
