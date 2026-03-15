@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { todayRisk } from '../data/mockData'
 
 const signalConfig = {
@@ -7,10 +7,14 @@ const signalConfig = {
   DANGER:  { color: '#ff3b5c', label: 'HIGH RISK', glow: 'glow-red',    bg: 'bg-accent-red/8' },
 }
 
+function getSignal(probability, threshold) {
+  if (probability >= threshold) return 'DANGER'
+  if (probability >= threshold * 0.7) return 'CAUTION'
+  return 'SAFE'
+}
+
 function GaugeSVG({ probability, threshold, color }) {
   const pct = Math.min(probability, 1)
-  const threshPct = Math.min(threshold, 1)
-  // Arc from -135deg to +135deg (270deg sweep)
   const startAngle = -135
   const sweepAngle = 270
   const r = 80
@@ -32,29 +36,26 @@ function GaugeSVG({ probability, threshold, color }) {
   const fullArc = describeArc(startAngle, startAngle + sweepAngle)
   const valueAngle = startAngle + sweepAngle * pct
   const valueArc = describeArc(startAngle, valueAngle)
-  const threshAngle = startAngle + sweepAngle * threshPct
+  const threshAngle = startAngle + sweepAngle * Math.min(threshold, 1)
   const threshPoint = polarToCartesian(threshAngle)
 
   return (
     <svg viewBox="0 0 200 160" className="w-full max-w-[280px]">
-      {/* Background track */}
       <path d={fullArc} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="12" strokeLinecap="round" />
-      {/* Value arc */}
       <path d={valueArc} fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
-        style={{ filter: `drop-shadow(0 0 8px ${color}40)` }} />
-      {/* Threshold marker */}
-      <circle cx={threshPoint.x} cy={threshPoint.y} r="4" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
+        style={{ filter: `drop-shadow(0 0 8px ${color}40)`, transition: 'stroke 0.3s ease' }} />
+      <circle cx={threshPoint.x} cy={threshPoint.y} r="4" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"
+        style={{ transition: 'all 0.3s ease' }} />
       <line x1={threshPoint.x} y1={threshPoint.y - 8} x2={threshPoint.x} y2={threshPoint.y + 8}
         stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round"
-        transform={`rotate(${threshAngle}, ${threshPoint.x}, ${threshPoint.y})`} />
-      {/* Center text */}
+        transform={`rotate(${threshAngle}, ${threshPoint.x}, ${threshPoint.y})`}
+        style={{ transition: 'all 0.3s ease' }} />
       <text x={cx} y={cy - 8} textAnchor="middle" className="font-mono" fill="white" fontSize="32" fontWeight="700">
         {(probability * 100).toFixed(1)}%
       </text>
       <text x={cx} y={cy + 14} textAnchor="middle" fill="rgba(255,255,255,0.4)" fontSize="10" className="font-mono">
         TAIL RISK PROB
       </text>
-      {/* Threshold label */}
       <text x={cx} y={145} textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="9" className="font-mono">
         GATE @ {(threshold * 100).toFixed(1)}%
       </text>
@@ -94,21 +95,60 @@ function DriverRow({ driver, index }) {
 }
 
 export default function RiskGauge() {
-  const config = signalConfig[todayRisk.signal]
+  const [threshold, setThreshold] = useState(todayRisk.threshold)
+  const signal = getSignal(todayRisk.probability, threshold)
+  const config = signalConfig[signal]
 
   return (
-    <div className={`card p-6 ${config.glow}`}>
+    <div className={`card p-6 ${config.glow}`} style={{ transition: 'box-shadow 0.3s ease' }}>
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Left: Gauge */}
+        {/* Left: Gauge + Slider */}
         <div className="flex flex-col items-center justify-center lg:w-[340px] shrink-0">
-          <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${config.bg} border border-white/5 mb-4`}>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }} />
-            <span className="text-xs font-mono font-semibold tracking-widest" style={{ color: config.color }}>
+          <div
+            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${config.bg} border border-white/5 mb-4`}
+            style={{ transition: 'all 0.3s ease' }}
+          >
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color, transition: 'background-color 0.3s ease' }} />
+            <span className="text-xs font-mono font-semibold tracking-widest" style={{ color: config.color, transition: 'color 0.3s ease' }}>
               {config.label}
             </span>
           </div>
-          <GaugeSVG probability={todayRisk.probability} threshold={todayRisk.threshold} color={config.color} />
-          <div className="flex gap-6 mt-2">
+          <GaugeSVG probability={todayRisk.probability} threshold={threshold} color={config.color} />
+
+          {/* Risk Tolerance Slider */}
+          <div className="w-full max-w-[280px] mt-4 px-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono text-white/25 uppercase tracking-wider">
+                Your Risk Tolerance
+              </span>
+              <span className="text-xs font-mono font-semibold" style={{ color: config.color, transition: 'color 0.3s ease' }}>
+                {(threshold * 100).toFixed(0)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="5"
+              max="50"
+              step="1"
+              value={Math.round(threshold * 100)}
+              onChange={(e) => setThreshold(Number(e.target.value) / 100)}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+              style={{
+                background: 'linear-gradient(to right, #00e5a0, #ffb020 50%, #ff3b5c)',
+              }}
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-[9px] font-mono text-accent-green/50">Conservative 5%</span>
+              <span className="text-[9px] font-mono text-accent-red/50">Aggressive 50%</span>
+            </div>
+            <p className="text-[10px] text-white/20 text-center mt-2 leading-relaxed">
+              {signal === 'SAFE' && 'Model probability is below your threshold — safe to trade.'}
+              {signal === 'CAUTION' && 'Approaching your threshold — consider reducing exposure.'}
+              {signal === 'DANGER' && 'Exceeds your threshold — gate recommended.'}
+            </p>
+          </div>
+
+          <div className="flex gap-6 mt-4">
             <div className="text-center">
               <p className="text-[10px] font-mono text-white/25 uppercase tracking-wider">Last Train</p>
               <p className="text-xs font-mono text-white/50 mt-1">{todayRisk.modelInfo.lastTrained}</p>
