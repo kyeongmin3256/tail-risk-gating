@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { todayRisk } from '../data/mockData'
 
 const signalConfig = {
   SAFE:    { color: '#00e5a0', label: 'LOW RISK',  glow: 'glow-green',  bg: 'bg-accent-green/8' },
@@ -74,29 +73,30 @@ function DriverRow({ driver, index }) {
     risk_decreasing: '▼',
     neutral: '—',
   }
+  const dir = driver.direction in directionColor ? driver.direction : 'neutral'
 
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-white/[0.04] last:border-0">
       <span className="text-[10px] font-mono text-white/20 w-4">{index + 1}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white/80 truncate">{driver.description}</p>
+        <p className="text-sm font-medium text-white/80 truncate">{driver.label || driver.feature}</p>
         <p className="text-xs font-mono text-white/30 mt-0.5">{driver.feature}</p>
       </div>
       <div className="text-right flex items-center gap-2">
         <span className="text-sm font-mono font-semibold text-white/70">
-          {typeof driver.value === 'number' ? driver.value.toFixed(2) : driver.value}
+          {typeof driver.shapValue === 'number' ? driver.shapValue.toFixed(4) : driver.shapValue}
         </span>
-        <span className={`text-xs ${directionColor[driver.direction]}`}>
-          {directionIcon[driver.direction]}
+        <span className={`text-xs ${directionColor[dir]}`}>
+          {directionIcon[dir]}
         </span>
       </div>
     </div>
   )
 }
 
-export default function RiskGauge() {
-  const [threshold, setThreshold] = useState(todayRisk.threshold)
-  const signal = getSignal(todayRisk.probability, threshold)
+export default function RiskGauge({ data }) {
+  const [gateThreshold, setGateThreshold] = useState(0.175)
+  const signal = getSignal(data.probability, gateThreshold)
   const config = signalConfig[signal]
 
   return (
@@ -113,16 +113,16 @@ export default function RiskGauge() {
               {config.label}
             </span>
           </div>
-          <GaugeSVG probability={todayRisk.probability} threshold={threshold} color={config.color} />
+          <GaugeSVG probability={data.probability} threshold={gateThreshold} color={config.color} />
 
-          {/* Risk Tolerance Slider */}
+          {/* Gate Threshold Slider */}
           <div className="w-full max-w-[280px] mt-4 px-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-mono text-white/25 uppercase tracking-wider">
-                Your Risk Tolerance
+                Gate Threshold
               </span>
               <span className="text-xs font-mono font-semibold" style={{ color: config.color, transition: 'color 0.3s ease' }}>
-                {(threshold * 100).toFixed(0)}%
+                {(gateThreshold * 100).toFixed(0)}%
               </span>
             </div>
             <input
@@ -130,32 +130,32 @@ export default function RiskGauge() {
               min="5"
               max="50"
               step="1"
-              value={Math.round(threshold * 100)}
-              onChange={(e) => setThreshold(Number(e.target.value) / 100)}
+              value={Math.round(gateThreshold * 100)}
+              onChange={(e) => setGateThreshold(Number(e.target.value) / 100)}
               className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
               style={{
                 background: 'linear-gradient(to right, #00e5a0, #ffb020 50%, #ff3b5c)',
               }}
             />
             <div className="flex justify-between mt-1">
-              <span className="text-[9px] font-mono text-accent-green/50">Conservative 5%</span>
-              <span className="text-[9px] font-mono text-accent-red/50">Aggressive 50%</span>
+              <span className="text-[9px] font-mono text-accent-green/50">Tight 5%</span>
+              <span className="text-[9px] font-mono text-accent-red/50">Loose 50%</span>
             </div>
             <p className="text-[10px] text-white/20 text-center mt-2 leading-relaxed">
-              {signal === 'SAFE' && 'Model probability is below your threshold — safe to trade.'}
-              {signal === 'CAUTION' && 'Approaching your threshold — consider reducing exposure.'}
-              {signal === 'DANGER' && 'Exceeds your threshold — gate recommended.'}
+              {signal === 'SAFE' && 'Model probability is below your gate — safe to trade.'}
+              {signal === 'CAUTION' && 'Approaching your gate — consider reducing exposure.'}
+              {signal === 'DANGER' && 'Exceeds your gate — skip this period.'}
             </p>
           </div>
 
           <div className="flex gap-6 mt-4">
             <div className="text-center">
-              <p className="text-[10px] font-mono text-white/25 uppercase tracking-wider">Last Train</p>
-              <p className="text-xs font-mono text-white/50 mt-1">{todayRisk.modelInfo.lastTrained}</p>
+              <p className="text-[10px] font-mono text-white/25 uppercase tracking-wider">Data Through</p>
+              <p className="text-xs font-mono text-white/50 mt-1">{data.date}</p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] font-mono text-white/25 uppercase tracking-wider">Window</p>
-              <p className="text-xs font-mono text-white/50 mt-1">{todayRisk.modelInfo.windowSize}</p>
+              <p className="text-[10px] font-mono text-white/25 uppercase tracking-wider">WF Folds</p>
+              <p className="text-xs font-mono text-white/50 mt-1">{data.modelInfo.nFolds}</p>
             </div>
           </div>
         </div>
@@ -164,14 +164,14 @@ export default function RiskGauge() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-4">
             <h2 className="font-display text-sm font-semibold text-white/60 uppercase tracking-wider">
-              Today's Risk Drivers
+              Top Risk Drivers
             </h2>
             <span className="text-[10px] font-mono text-white/20 bg-white/5 px-2 py-0.5 rounded">
               SHAP
             </span>
           </div>
           <div>
-            {todayRisk.topDrivers.map((driver, i) => (
+            {data.topDrivers.map((driver, i) => (
               <DriverRow key={driver.feature} driver={driver} index={i} />
             ))}
           </div>

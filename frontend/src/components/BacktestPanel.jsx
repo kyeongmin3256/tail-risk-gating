@@ -1,9 +1,8 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { backtestResults } from '../data/mockData'
 
 function StatCompare({ label, gated, ungated, format = 'pct', higherBetter = true }) {
   const formatVal = (v) => {
@@ -16,7 +15,6 @@ function StatCompare({ label, gated, ungated, format = 'pct', higherBetter = tru
   }
 
   const gatedBetter = higherBetter ? gated > ungated : gated < ungated
-  const ungatedBetter = !gatedBetter
 
   return (
     <div className="py-3 border-b border-white/[0.04] last:border-0">
@@ -29,10 +27,10 @@ function StatCompare({ label, gated, ungated, format = 'pct', higherBetter = tru
           {gatedBetter && <span className="text-[9px] text-accent-cyan ml-1.5">✓</span>}
         </div>
         <div className="flex-1 text-right">
-          <span className={`text-lg font-mono font-bold ${ungatedBetter ? 'text-accent-cyan' : 'text-white/50'}`}>
+          <span className={`text-lg font-mono font-bold ${!gatedBetter ? 'text-accent-cyan' : 'text-white/50'}`}>
             {formatVal(ungated)}
           </span>
-          {ungatedBetter && <span className="text-[9px] text-accent-cyan ml-1.5">✓</span>}
+          {!gatedBetter && <span className="text-[9px] text-accent-cyan ml-1.5">✓</span>}
         </div>
       </div>
     </div>
@@ -47,8 +45,8 @@ function CustomTooltip({ active, payload, label }) {
       {payload.map((entry, i) => (
         <p key={i} className="text-xs font-mono" style={{ color: entry.color }}>
           {entry.name}: {typeof entry.value === 'number'
-            ? (entry.dataKey.includes('drawdown') || entry.dataKey.includes('Drawdown')
-              ? (entry.value * 100).toFixed(1) + '%'
+            ? (entry.dataKey.includes('gated') || entry.dataKey.includes('ungated')
+              ? entry.value.toFixed(3)
               : entry.value.toFixed(3))
             : entry.value}
         </p>
@@ -57,9 +55,9 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-export default function BacktestPanel() {
+export default function BacktestPanel({ data }) {
   const [chart, setChart] = useState('equity')
-  const { gated, ungated } = backtestResults.summary
+  const { gated, ungated } = data.summary
 
   return (
     <div className="card p-6">
@@ -69,7 +67,7 @@ export default function BacktestPanel() {
             Backtest Results
           </h2>
           <p className="text-[10px] font-mono text-white/25 mt-1">
-            Gated vs Ungated short-vol strategy · {gated.tradingDays} trading days · {gated.daysGated} days gated
+            Gated vs Ungated short-vol strategy · {ungated.tradingDays} trading days · {gated.daysGated} days gated
           </p>
         </div>
         <div className="flex bg-white/[0.04] rounded-lg p-0.5">
@@ -95,7 +93,7 @@ export default function BacktestPanel() {
           <div className="h-[300px]">
             {chart === 'equity' ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={backtestResults.equityCurve}>
+                <AreaChart data={data.equityCurve}>
                   <defs>
                     <linearGradient id="gatedFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06d6d0" stopOpacity={0.12} />
@@ -107,8 +105,8 @@ export default function BacktestPanel() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" interval={4} />
-                  <YAxis domain={[0.9, 'auto']} tickFormatter={(v) => v.toFixed(1) + 'x'} />
+                  <XAxis dataKey="date" interval={Math.floor(data.equityCurve.length / 6)} tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={(v) => v.toFixed(1) + 'x'} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="ungated" stroke="#7a7d8e" strokeWidth={1.5} fill="url(#ungatedFill)"
                     name="Ungated" strokeDasharray="4 4" />
@@ -118,7 +116,7 @@ export default function BacktestPanel() {
               </ResponsiveContainer>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={backtestResults.drawdownSeries}>
+                <AreaChart data={data.drawdownSeries}>
                   <defs>
                     <linearGradient id="ddGatedFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06d6d0" stopOpacity={0} />
@@ -130,8 +128,8 @@ export default function BacktestPanel() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" interval={2} />
-                  <YAxis domain={[-0.35, 0]} tickFormatter={(v) => (v * 100).toFixed(0) + '%'} />
+                  <XAxis dataKey="date" interval={Math.floor(data.drawdownSeries.length / 6)} tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={(v) => (v * 100).toFixed(0) + '%'} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="ungated" stroke="#ff3b5c" strokeWidth={1.5} fill="url(#ddUngatedFill)"
                     name="Ungated" strokeDasharray="4 4" />
@@ -146,7 +144,7 @@ export default function BacktestPanel() {
           <div className="flex justify-center gap-6 mt-3">
             <div className="flex items-center gap-2">
               <span className="w-5 h-0.5 bg-accent-cyan rounded" />
-              <span className="text-[10px] font-mono text-white/40">Gated</span>
+              <span className="text-[10px] font-mono text-white/40">Gated (gate @ 15%)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-5 h-0.5 bg-white/30 rounded" style={{ borderTop: '1px dashed rgba(255,255,255,0.3)' }} />
@@ -157,7 +155,6 @@ export default function BacktestPanel() {
 
         {/* Stats sidebar */}
         <div className="lg:w-[260px] shrink-0">
-          {/* Column headers */}
           <div className="flex gap-4 pb-2 border-b border-white/[0.08]">
             <div className="flex-1">
               <span className="text-[10px] font-mono text-accent-cyan uppercase tracking-wider font-semibold">Gated</span>
@@ -172,7 +169,6 @@ export default function BacktestPanel() {
           <StatCompare label="Sharpe Ratio" gated={gated.sharpe} ungated={ungated.sharpe} format="ratio" />
           <StatCompare label="Max Drawdown" gated={gated.maxDrawdown} ungated={ungated.maxDrawdown} higherBetter={false} />
           <StatCompare label="Calmar Ratio" gated={gated.calmar} ungated={ungated.calmar} format="ratio" />
-          <StatCompare label="Win Rate" gated={gated.winRate} ungated={ungated.winRate} />
         </div>
       </div>
     </div>

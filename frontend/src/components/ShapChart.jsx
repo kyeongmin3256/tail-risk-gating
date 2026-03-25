@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
-import { shapValues } from '../data/mockData'
 
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
@@ -11,28 +10,25 @@ function CustomTooltip({ active, payload }) {
     <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
       <p className="text-xs font-semibold text-white/90">{d.feature}</p>
       <p className="text-xs font-mono text-accent-cyan mt-1">
-        SHAP: {d.importance.toFixed(3)}
+        SHAP: {d.importance.toFixed(4)}
       </p>
       <p className="text-[10px] font-mono text-white/40 mt-0.5">
-        Direction: {d.direction}
+        Direction: {d.direction.replace('_', ' ')}
       </p>
     </div>
   )
 }
 
-export default function ShapChart() {
-  const [showAll, setShowAll] = useState(false)
-  const data = showAll ? shapValues : shapValues.slice(0, 10)
-  const maxVal = Math.max(...data.map(d => d.importance))
+const BAR_COLORS = {
+  risk_increasing: '#ff3b5c',
+  risk_decreasing: '#00e5a0',
+  mixed: '#ffb020',
+}
 
-  const getBarColor = (direction) => {
-    switch (direction) {
-      case 'positive': return '#ff3b5c'
-      case 'negative': return '#00e5a0'
-      case 'mixed': return '#ffb020'
-      default: return '#3b82f6'
-    }
-  }
+export default function ShapChart({ data }) {
+  const [showAll, setShowAll] = useState(false)
+  const display = showAll ? data : data.slice(0, 10)
+  const maxVal = Math.max(...display.map(d => d.importance))
 
   return (
     <div className="card p-6">
@@ -49,7 +45,7 @@ export default function ShapChart() {
           onClick={() => setShowAll(!showAll)}
           className="text-[11px] font-mono text-white/30 hover:text-white/60 transition-colors px-3 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08]"
         >
-          {showAll ? 'Top 10' : `All ${shapValues.length}`}
+          {showAll ? 'Top 10' : `All ${data.length}`}
         </button>
       </div>
 
@@ -69,12 +65,12 @@ export default function ShapChart() {
 
       <div className={showAll ? 'h-[400px]' : 'h-[320px]'}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
+          <BarChart data={display} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
             <XAxis
               type="number"
               domain={[0, maxVal * 1.1]}
-              tickFormatter={(v) => v.toFixed(2)}
+              tickFormatter={(v) => v.toFixed(3)}
             />
             <YAxis
               type="category"
@@ -84,8 +80,8 @@ export default function ShapChart() {
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
             <Bar dataKey="importance" radius={[0, 4, 4, 0]} maxBarSize={20}>
-              {data.map((entry, i) => (
-                <Cell key={i} fill={getBarColor(entry.direction)} fillOpacity={0.8} />
+              {display.map((entry, i) => (
+                <Cell key={i} fill={BAR_COLORS[entry.direction] || '#3b82f6'} fillOpacity={0.8} />
               ))}
             </Bar>
           </BarChart>

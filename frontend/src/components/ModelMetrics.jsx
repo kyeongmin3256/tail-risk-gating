@@ -3,7 +3,6 @@ import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
-import { modelMetrics } from '../data/mockData'
 
 function MetricCard({ label, value, sublabel, accent = false }) {
   return (
@@ -17,7 +16,7 @@ function MetricCard({ label, value, sublabel, accent = false }) {
   )
 }
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
@@ -30,8 +29,17 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-export default function ModelMetrics() {
+export default function ModelMetrics({ data }) {
   const [tab, setTab] = useState('roc')
+
+  // Build fold chart data — skip folds with null AUC
+  const foldChartData = data.walkForwardFolds
+    .filter(f => f.auc !== null)
+    .map(f => ({ ...f }))
+
+  const avgAuc = foldChartData.length > 0
+    ? foldChartData.reduce((s, f) => s + f.auc, 0) / foldChartData.length
+    : data.rocAuc
 
   return (
     <div className="card p-6">
@@ -58,16 +66,16 @@ export default function ModelMetrics() {
 
       {/* Key Metrics Row */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <MetricCard label="ROC-AUC" value={modelMetrics.rocAuc.toFixed(2)} sublabel="Walk-forward avg" accent />
-        <MetricCard label="Avg Precision" value={modelMetrics.avgPrecision.toFixed(2)} sublabel="PR-AUC" />
-        <MetricCard label="Brier Score" value={modelMetrics.brierScore.toFixed(3)} sublabel="Lower = better" />
+        <MetricCard label="ROC-AUC" value={data.rocAuc.toFixed(2)} sublabel="Walk-forward OOS" accent />
+        <MetricCard label="Avg Precision" value={data.avgPrecision.toFixed(2)} sublabel="PR-AUC" />
+        <MetricCard label="Brier Score" value={data.brierScore.toFixed(3)} sublabel="Lower = better" />
       </div>
 
       {/* Chart */}
       <div className="h-[240px]">
         {tab === 'roc' ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={modelMetrics.rocCurve}>
+            <AreaChart data={data.rocCurve}>
               <defs>
                 <linearGradient id="rocFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#06d6d0" stopOpacity={0.15} />
@@ -107,19 +115,19 @@ export default function ModelMetrics() {
           </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={modelMetrics.walkForwardFolds}>
+            <LineChart data={foldChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" />
-              <YAxis domain={[0.5, 1.0]} tickFormatter={(v) => v.toFixed(1)} />
+              <XAxis dataKey="period" tick={{ fontSize: 9 }} interval={Math.floor(foldChartData.length / 6)} />
+              <YAxis domain={[0.4, 1.0]} tickFormatter={(v) => v.toFixed(1)} />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={modelMetrics.rocAuc} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" label="" />
+              <ReferenceLine y={avgAuc} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
               <Line
                 type="monotone"
                 dataKey="auc"
                 stroke="#06d6d0"
                 strokeWidth={2}
-                dot={{ r: 5, fill: '#06d6d0', stroke: '#0a0b0f', strokeWidth: 2 }}
-                activeDot={{ r: 7 }}
+                dot={{ r: 3, fill: '#06d6d0', stroke: '#0a0b0f', strokeWidth: 2 }}
+                activeDot={{ r: 6 }}
                 name="AUC"
               />
             </LineChart>
@@ -127,11 +135,11 @@ export default function ModelMetrics() {
         )}
       </div>
 
-      {/* Walk-forward fold table (always visible as detail) */}
+      {/* Fold table */}
       {tab === 'folds' && (
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 overflow-x-auto max-h-[200px] overflow-y-auto">
           <table className="w-full text-xs font-mono">
-            <thead>
+            <thead className="sticky top-0 bg-surface-800">
               <tr className="text-white/25 uppercase tracking-wider">
                 <th className="text-left py-2 pr-4">Fold</th>
                 <th className="text-left py-2 pr-4">Period</th>
@@ -141,13 +149,17 @@ export default function ModelMetrics() {
               </tr>
             </thead>
             <tbody>
-              {modelMetrics.walkForwardFolds.map((fold) => (
+              {data.walkForwardFolds.map((fold) => (
                 <tr key={fold.fold} className="border-t border-white/[0.04] text-white/60">
                   <td className="py-2 pr-4">{fold.fold}</td>
                   <td className="py-2 pr-4">{fold.period}</td>
-                  <td className="py-2 pr-4 text-right text-accent-cyan font-semibold">{fold.auc.toFixed(2)}</td>
+                  <td className="py-2 pr-4 text-right text-accent-cyan font-semibold">
+                    {fold.auc !== null ? fold.auc.toFixed(2) : '—'}
+                  </td>
                   <td className="py-2 pr-4 text-right">{fold.samples}</td>
-                  <td className="py-2 text-right">{((fold.positives / fold.samples) * 100).toFixed(1)}%</td>
+                  <td className="py-2 text-right">
+                    {fold.samples > 0 ? ((fold.positives / fold.samples) * 100).toFixed(1) : '0.0'}%
+                  </td>
                 </tr>
               ))}
             </tbody>
