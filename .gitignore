@@ -52,5 +52,3 @@ frontend/dist/
 
 # Local shell/editor artifacts
 .Rhistory
-{.github
-{notebooks,models,results}
