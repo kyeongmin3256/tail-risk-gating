@@ -1,7 +1,5 @@
 """Tests for FRED CSV fallback parsing robustness."""
 
-from pathlib import Path
-
 import pandas as pd
 import pytest
 
