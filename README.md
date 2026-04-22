@@ -1,139 +1,126 @@
-# TailCast: Conditional Tail-Risk Forecasting for Short-Vol Strategies
+# TailCast
 
-TailCast is a quantitative ML system that estimates daily conditional tail-risk probabilities and converts them into deterministic risk-gating decisions for short-volatility strategies.
+TailCast is an ML-driven **tail-risk gating system** for short-volatility strategies.
 
-## What TailCast Does
+It predicts the conditional probability of extreme downside events in SPY and turns that probability into explicit trading actions (trade, reduce, or skip) to improve risk-adjusted performance.
 
-TailCast forecasts:
+## Objective
 
-- `P(extreme_loss | current market state)`
+Short-vol strategies can produce stable carry most of the time, but are vulnerable to regime-shift drawdowns.
+TailCast is designed to answer one question each day:
 
-and uses simple policy rules:
+**"Should this strategy be traded today, given current tail-risk conditions?"**
 
-- elevated risk -> reduce exposure
-- extreme risk -> move to cash
+## Core Results
 
-The objective is to improve risk-adjusted performance and reduce left-tail damage during regime stress.
-
-## Current Scope
-
-- Python + PostgreSQL data pipeline with long-history market data ingestion
-- Feature engineering focused on volatility, credit stress, momentum, and calendar context
-- LightGBM classifier for tail-event likelihood prediction
-- Probability calibration (isotonic or Platt/scikit-learn logistic)
-- Walk-forward validation/backtesting with out-of-sample predictions
-- Explainability via SHAP
-- FastAPI service and React/Tailwind frontend
-
-## Backtest Snapshot
-
-Latest gating run (walk-forward, calibrated probabilities):
+### Walk-forward gated vs ungated (-4% model bucket)
 
 - Sharpe: `0.8912 -> 0.9406` (**+5.55%**)
-- CVaR(95): `-0.0105 -> -0.0101` (**4.16% risk reduction**)
+- CVaR(95): `-0.0105 -> -0.0101` (**4.16% tail-risk reduction**)
 - Annual return: `5.79% -> 5.90%` (**+1.95%**)
-- Max drawdown: `-0.1312 -> -0.1312` (effectively unchanged)
 - Gate activity: `days_scaled=83`, `days_in_cash=35`
 
-Notes:
+### Significance diagnostics
 
-- These numbers summarize gated vs ungated strategy outcomes under the current threshold setup.
-- The benchmark in current reports is `benchmark_60_40`.
+TailCast includes moving-block bootstrap significance tests for Sharpe/CVaR deltas and threshold sweeps.
+
+- Candidate configuration with strongest OOT profile: `threshold=2`, `soft gate=0.20`
+- OOT Sharpe delta: `+0.1852`
+- OOT CVaR improvement: `+0.00611`
+
+Artifacts:
+
+- `data/model_outputs/significance_sweep_t2_soft.csv`
+- `data/model_outputs/significance_oot_t2_soft.csv`
+
+## Architecture
+
+```text
+Yahoo Finance + FRED
+        ↓
+Phase 1: Data pipeline + feature engineering (25+ features)
+        ↓
+Phase 2: LightGBM + walk-forward + calibration + SHAP
+        ↓
+Phase 3: Gated vs ungated strategy evaluation + significance testing
+        ↓
+Phase 4: FastAPI + React/Tailwind dashboard
+```
+
+## System Components
+
+- **Data**: Yahoo Finance + FRED ingestion with local caching
+- **Features**: volatility term structure, credit stress, momentum, calendar regime context
+- **Model**: LightGBM classifier with class-imbalance handling
+- **Validation**: expanding-window walk-forward retraining
+- **Calibration**: isotonic / platt scaling for probability interpretability
+- **Explainability**: SHAP-based global and daily risk drivers
+- **Serving**: FastAPI endpoints delivering real dashboard payloads
+- **Frontend**: React + Tailwind + Recharts, threshold-aware dashboard UX
+
+## Repository Structure
+
+```text
+src/
+├── data/          # Yahoo Finance + FRED ingestion
+├── features/      # feature engineering
+├── labels/        # target definition
+├── models/        # LightGBM, walk-forward, calibration, SHAP
+├── evaluation/    # backtesting + metrics
+└── api/           # FastAPI endpoints
+
+frontend/
+└── src/components # RiskGauge, ModelMetrics, ShapChart, BacktestPanel
+```
 
 ## Quick Start
-
-### 1) Environment setup
 
 ```bash
 git clone https://github.com/kyeongmin3256/tail-risk-gating.git
 cd tail-risk-gating
-
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2) Optional: FRED API key
-
-Get a free key: https://fred.stlouisfed.org/docs/api/api_key.html
+Optional FRED key:
 
 ```bash
 export FRED_API_KEY=your_key_here
 ```
 
-### 3) Build dataset and labels (Phase 1)
+Run pipeline and training:
 
 ```bash
 python run_pipeline.py
-```
-
-Useful options:
-
-```bash
-python run_pipeline.py --use-cache
-python run_pipeline.py --threshold -0.10 --horizon 10
-```
-
-### 4) Train and evaluate (Phase 2)
-
-```bash
 python run_training.py
 ```
 
-### 5) Optional: model pipeline variant
+Run multi-threshold training:
 
 ```bash
-python run_model.py --skip-shap
+python run_multi_threshold.py
 ```
 
-### 6) Run tests
+Run significance analysis:
 
 ```bash
-pytest tests/ -v
+python run_significance.py --sweep --compare-modes --thresholds 2 4 6 8 --gate-thresholds 0.10 0.15 0.20 0.25
 ```
 
-### 7) Optional: start Postgres
+Run API:
 
 ```bash
-docker-compose up -d
+uvicorn src.api.main:app --reload --port 8000
 ```
 
-## Project Structure
+Run frontend:
 
-```text
-src/
-├── data/          # Data ingestion (Yahoo Finance, FRED)
-├── features/      # Volatility, market structure, momentum, calendar features
-├── labels/        # Strategy proxy + binary/continuous target creation
-├── models/        # LightGBM training, calibration, walk-forward engine, SHAP
-├── evaluation/    # Metrics and backtesting logic
-├── api/           # FastAPI service
-└── dashboard/     # Frontend integration hooks
+```bash
+cd frontend
+npm install
+VITE_API_BASE_URL=http://localhost:8000 npm run dev
 ```
-
-## Data Sources
-
-All sources are publicly accessible:
-
-- Yahoo Finance: SPY, VIX, VVIX, SKEW, VIX9D, VIX3M, HYG, IEF, UUP
-- FRED: 2Y and 10Y Treasury yields
-
-## Method Summary
-
-1. Build market-state features from daily cross-asset and macro signals.
-2. Define tail outcomes from forward strategy loss proxy.
-3. Train classifier to estimate tail-event probability.
-4. Calibrate probabilities for threshold interpretability.
-5. Run expanding-window walk-forward tests.
-6. Compare gated vs ungated outcomes on return and tail-risk metrics.
-
-## Next Improvements
-
-- Add result visuals to repository root:
-  - cumulative equity (gated vs ungated)
-  - gating activation timeline
-  - probability calibration curve
-- Add explicit short-straddle buy-and-hold benchmark line to summary reports.
 
 ## License
 
