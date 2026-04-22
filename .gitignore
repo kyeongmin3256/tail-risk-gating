@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Data (downloaded, not committed)
+data/raw/*.csv
+data/processed/*.csv
+data/processed/*.parquet
+
+# Model artifacts
+models/*.pkl
+models/*.joblib
+models/*.json
+
+# Results (generated, not committed)
+results/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env
+
+# Docker
+pgdata/
+
+# Frontend dependencies/build
+frontend/node_modules/
+frontend/dist/
+
+# Local shell/editor artifacts
+.Rhistory
+{.github
+{notebooks,models,results}
