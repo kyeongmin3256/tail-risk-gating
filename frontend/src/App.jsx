@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Header from './components/Header'
 import RiskGauge from './components/RiskGauge'
 import ModelMetrics from './components/ModelMetrics'
@@ -8,12 +8,71 @@ import { THRESHOLDS, dataByThreshold } from './data/mockData'
 
 export default function App() {
   const [modelThreshold, setModelThreshold] = useState(4)
-  const data = dataByThreshold[String(modelThreshold)]
+  const [thresholds, setThresholds] = useState(THRESHOLDS)
+  const [apiDataByThreshold, setApiDataByThreshold] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState('')
+
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+    fetch(`${base}/api/dashboard/data`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then((json) => {
+        if (json?.thresholds && json?.dataByThreshold) {
+          setThresholds(json.thresholds)
+          setApiDataByThreshold(json.dataByThreshold)
+          if (!json.thresholds.includes(modelThreshold) && json.thresholds.length > 0) {
+            setModelThreshold(json.thresholds[0])
+          }
+        } else {
+          throw new Error('Invalid API payload')
+        }
+      })
+      .catch((err) => {
+        setApiError(`API unavailable (${err.message}), using local mock data`)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const source = apiDataByThreshold || dataByThreshold
+  const data = source[String(modelThreshold)]
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-surface-900 noise-overlay relative">
+        <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
+          <Header />
+          <section className="mt-6">
+            <div className="card px-4 py-3 text-sm font-mono text-white/50">
+              No dashboard data available for selected threshold.
+            </div>
+          </section>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-surface-900 noise-overlay relative">
       <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
         <Header />
+
+        {loading && (
+          <section className="mt-4">
+            <div className="card px-4 py-3 text-xs font-mono text-white/40">
+              Loading dashboard data from API...
+            </div>
+          </section>
+        )}
+        {!loading && apiError && (
+          <section className="mt-4">
+            <div className="card px-4 py-3 text-xs font-mono text-amber-300/80">
+              {apiError}
+            </div>
+          </section>
+        )}
 
         {/* Model Threshold Selector */}
         <section className="mt-4">
@@ -27,7 +86,7 @@ export default function App() {
               </p>
             </div>
             <div className="flex gap-2 ml-auto">
-              {THRESHOLDS.map((t) => (
+              {thresholds.map((t) => (
                 <button
                   key={t}
                   onClick={() => setModelThreshold(t)}

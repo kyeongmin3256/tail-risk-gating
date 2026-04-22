@@ -110,8 +110,29 @@ class DataFetcher:
                 f"&cosd={self.start_date}"
                 f"&coed={self.end_date}"
             )
-            df = pd.read_csv(url, parse_dates=["DATE"], index_col="DATE")
-            series = df.iloc[:, 0]
+            df = pd.read_csv(url)
+
+            # FRED usually returns DATE, but be defensive in case of schema drift.
+            date_col = next((c for c in df.columns if c.upper() == "DATE"), None)
+            if date_col is None:
+                raise ValueError(
+                    f"FRED response for {series_id} missing DATE column. "
+                    f"Columns: {list(df.columns)}"
+                )
+
+            value_col = series_id if series_id in df.columns else None
+            if value_col is None:
+                candidates = [c for c in df.columns if c != date_col]
+                if not candidates:
+                    raise ValueError(
+                        f"FRED response for {series_id} missing value column. "
+                        f"Columns: {list(df.columns)}"
+                    )
+                value_col = candidates[0]
+
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            df = df.set_index(date_col)
+            series = df[value_col]
             # FRED uses '.' for missing values
             series = pd.to_numeric(series, errors="coerce")
 

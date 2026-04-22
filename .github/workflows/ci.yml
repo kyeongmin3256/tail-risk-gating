@@ -28,3 +28,6 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
+
+      - name: FRED parsing stability tests
+        run: pytest tests/test_fred_fetcher.py -v --tb=short
