@@ -22,9 +22,9 @@ export default {
         }
       },
       fontFamily: {
-        mono: ['"IBM Plex Mono"', 'monospace'],
-        display: ['"Outfit"', 'system-ui', 'sans-serif'],
-        body: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        display: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        body: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
       },
     },
   },
