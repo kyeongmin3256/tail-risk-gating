@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy import text
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.dashboard_data import load_dashboard_data
+from src.config import load_config
+from src.data.db import build_store
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -33,6 +37,29 @@ def _get_data(force_refresh: bool = False) -> dict:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/health/db")
+def health_db() -> dict:
+    config = load_config()
+    if not config.get("database_url"):
+        return {"status": "disabled", "postgresql": False, "message": "DATABASE_URL not configured"}
+
+    store = build_store(config, init_schema=False)
+    if store is None:
+        return {"status": "unavailable", "postgresql": False, "message": "PostgreSQL unreachable"}
+
+    try:
+        with store.engine.connect() as conn:
+            ohlcv = conn.execute(text("SELECT COUNT(*) FROM ohlcv_daily")).scalar()
+            macro = conn.execute(text("SELECT COUNT(*) FROM macro_series")).scalar()
+        return {
+            "status": "ok",
+            "postgresql": True,
+            "tables": {"ohlcv_daily": int(ohlcv), "macro_series": int(macro)},
+        }
+    except Exception as exc:
+        return {"status": "error", "postgresql": False, "message": str(exc)}
 
 
 @app.get("/api/dashboard/thresholds")

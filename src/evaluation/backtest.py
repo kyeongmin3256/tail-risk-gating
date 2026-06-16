@@ -17,6 +17,13 @@ import logging
 import numpy as np
 import pandas as pd
 
+from src.evaluation.gating import (
+    STRADDLE_BH_LABEL,
+    apply_gating,
+    gated_strategy_label,
+    gating_config_for,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,8 +71,8 @@ class StrategyBacktest:
         acts = actuals.loc[common_idx]
         fwd = forward_returns.loc[common_idx]
 
-        # Ungated baseline
-        baseline = self._compute_stats(fwd, "ungated (always trade)")
+        # Short-straddle buy-and-hold baseline (always trade).
+        baseline = self._compute_stats(fwd, STRADDLE_BH_LABEL)
 
         results = [baseline]
         for threshold in gate_thresholds:
@@ -89,6 +96,38 @@ class StrategyBacktest:
         df = pd.DataFrame(results)
         logger.info(f"Backtest complete across {len(gate_thresholds)} thresholds")
         return df
+
+    def run_primary(
+        self,
+        predictions: pd.Series,
+        actuals: pd.Series,
+        forward_returns: pd.Series,
+        threshold_pct: int,
+    ) -> pd.DataFrame:
+        """Compare configured primary gating vs short-straddle B&H."""
+        cfg = gating_config_for(threshold_pct, self.config)
+        mode = str(cfg["mode"])
+        gate_threshold = float(cfg["gate_threshold"])
+
+        common_idx = predictions.index.intersection(
+            actuals.index
+        ).intersection(forward_returns.index)
+        preds = predictions.loc[common_idx]
+        acts = actuals.loc[common_idx]
+        fwd = forward_returns.loc[common_idx]
+
+        baseline = self._compute_stats(fwd, STRADDLE_BH_LABEL)
+        gated_returns = apply_gating(fwd, preds, gate_threshold, mode)
+        gated = self._compute_stats(gated_returns, gated_strategy_label(mode, gate_threshold))
+        gated["gate_threshold"] = gate_threshold
+        gated["gating_mode"] = mode
+        gated["days_traded"] = int((gated_returns != 0).sum())
+        gated["days_skipped"] = int((gated_returns == 0).sum())
+        gated["pct_traded"] = float((gated_returns != 0).mean())
+        gated["tail_events_avoided"] = int(acts[gated_returns == 0].sum())
+        gated["tail_events_total"] = int(acts.sum())
+
+        return pd.DataFrame([baseline, gated])
 
     def _compute_stats(self, returns: pd.Series, label: str) -> dict:
         """Compute strategy performance statistics.

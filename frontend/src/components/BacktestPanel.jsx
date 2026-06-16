@@ -4,7 +4,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts'
 
-function StatCompare({ label, gated, ungated, format = 'pct', higherBetter = true }) {
+function StatCompare({ label, gated, baseline, format = 'pct', higherBetter = true }) {
   const formatVal = (v) => {
     switch (format) {
       case 'pct': return (v * 100).toFixed(1) + '%'
@@ -14,7 +14,7 @@ function StatCompare({ label, gated, ungated, format = 'pct', higherBetter = tru
     }
   }
 
-  const gatedBetter = higherBetter ? gated > ungated : gated < ungated
+  const gatedBetter = higherBetter ? gated > baseline : gated < baseline
 
   return (
     <div className="py-3 border-b border-white/[0.04] last:border-0">
@@ -28,7 +28,7 @@ function StatCompare({ label, gated, ungated, format = 'pct', higherBetter = tru
         </div>
         <div className="flex-1 text-right">
           <span className={`text-lg font-mono font-bold ${!gatedBetter ? 'text-accent-cyan' : 'text-white/50'}`}>
-            {formatVal(ungated)}
+            {formatVal(baseline)}
           </span>
           {!gatedBetter && <span className="text-[9px] text-accent-cyan ml-1.5">✓</span>}
         </div>
@@ -44,11 +44,7 @@ function CustomTooltip({ active, payload, label }) {
       <p className="text-[10px] font-mono text-white/40 mb-1">{label}</p>
       {payload.map((entry, i) => (
         <p key={i} className="text-xs font-mono" style={{ color: entry.color }}>
-          {entry.name}: {typeof entry.value === 'number'
-            ? (entry.dataKey.includes('gated') || entry.dataKey.includes('ungated')
-              ? entry.value.toFixed(3)
-              : entry.value.toFixed(3))
-            : entry.value}
+          {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(3) : entry.value}
         </p>
       ))}
     </div>
@@ -57,7 +53,14 @@ function CustomTooltip({ active, payload, label }) {
 
 export default function BacktestPanel({ data }) {
   const [chart, setChart] = useState('equity')
-  const { gated, ungated } = data.summary
+  const { gated, baseline, ungated } = data.summary
+  const bench = baseline ?? ungated
+  const policy = data.gatingPolicy ?? {
+    label: 'Hard Gate @ 15%',
+    benchmarkLabel: 'Short Straddle B&H',
+    mode: 'hard',
+    gateThreshold: 0.15,
+  }
 
   return (
     <div className="card p-6">
@@ -67,7 +70,7 @@ export default function BacktestPanel({ data }) {
             Backtest Results
           </h2>
           <p className="text-[10px] font-mono text-white/25 mt-1">
-            Gated vs Ungated short-vol strategy · {ungated.tradingDays} trading days · {gated.daysGated} days gated
+            {policy.label} vs {policy.benchmarkLabel} · {bench.tradingDays} trading days · {gated.daysGated} low-exposure days
           </p>
         </div>
         <div className="flex bg-white/[0.04] rounded-lg p-0.5">
@@ -88,7 +91,6 @@ export default function BacktestPanel({ data }) {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Chart */}
         <div className="flex-1 min-w-0">
           <div className="h-[300px]">
             {chart === 'equity' ? (
@@ -109,9 +111,9 @@ export default function BacktestPanel({ data }) {
                   <YAxis tickFormatter={(v) => v.toFixed(1) + 'x'} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="ungated" stroke="#7a7d8e" strokeWidth={1.5} fill="url(#ungatedFill)"
-                    name="Ungated" strokeDasharray="4 4" />
+                    name={policy.benchmarkLabel} strokeDasharray="4 4" />
                   <Area type="monotone" dataKey="gated" stroke="#06d6d0" strokeWidth={2} fill="url(#gatedFill)"
-                    name="Gated" />
+                    name={policy.label} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -132,43 +134,41 @@ export default function BacktestPanel({ data }) {
                   <YAxis tickFormatter={(v) => (v * 100).toFixed(0) + '%'} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="ungated" stroke="#ff3b5c" strokeWidth={1.5} fill="url(#ddUngatedFill)"
-                    name="Ungated" strokeDasharray="4 4" />
+                    name={policy.benchmarkLabel} strokeDasharray="4 4" />
                   <Area type="monotone" dataKey="gated" stroke="#06d6d0" strokeWidth={2} fill="url(#ddGatedFill)"
-                    name="Gated" />
+                    name={policy.label} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
 
-          {/* Chart legend */}
           <div className="flex justify-center gap-6 mt-3">
             <div className="flex items-center gap-2">
               <span className="w-5 h-0.5 bg-accent-cyan rounded" />
-              <span className="text-[10px] font-mono text-white/40">Gated (gate @ 15%)</span>
+              <span className="text-[10px] font-mono text-white/40">{policy.label}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-5 h-0.5 bg-white/30 rounded" style={{ borderTop: '1px dashed rgba(255,255,255,0.3)' }} />
-              <span className="text-[10px] font-mono text-white/40">Ungated</span>
+              <span className="text-[10px] font-mono text-white/40">{policy.benchmarkLabel}</span>
             </div>
           </div>
         </div>
 
-        {/* Stats sidebar */}
         <div className="lg:w-[260px] shrink-0">
           <div className="flex gap-4 pb-2 border-b border-white/[0.08]">
             <div className="flex-1">
               <span className="text-[10px] font-mono text-accent-cyan uppercase tracking-wider font-semibold">Gated</span>
             </div>
             <div className="flex-1 text-right">
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider font-semibold">Ungated</span>
+              <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider font-semibold">B&H</span>
             </div>
           </div>
 
-          <StatCompare label="Total Return" gated={gated.totalReturn - 1} ungated={ungated.totalReturn - 1} />
-          <StatCompare label="Ann. Return" gated={gated.annualizedReturn} ungated={ungated.annualizedReturn} />
-          <StatCompare label="Sharpe Ratio" gated={gated.sharpe} ungated={ungated.sharpe} format="ratio" />
-          <StatCompare label="Max Drawdown" gated={gated.maxDrawdown} ungated={ungated.maxDrawdown} higherBetter={false} />
-          <StatCompare label="Calmar Ratio" gated={gated.calmar} ungated={ungated.calmar} format="ratio" />
+          <StatCompare label="Total Return" gated={gated.totalReturn - 1} baseline={bench.totalReturn - 1} />
+          <StatCompare label="Ann. Return" gated={gated.annualizedReturn} baseline={bench.annualizedReturn} />
+          <StatCompare label="Sharpe Ratio" gated={gated.sharpe} baseline={bench.sharpe} format="ratio" />
+          <StatCompare label="Max Drawdown" gated={gated.maxDrawdown} baseline={bench.maxDrawdown} higherBetter={false} />
+          <StatCompare label="Calmar Ratio" gated={gated.calmar} baseline={bench.calmar} format="ratio" />
         </div>
       </div>
     </div>

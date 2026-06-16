@@ -20,6 +20,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.evaluation.gating import apply_gating
+
 
 def annualized_sharpe(returns: np.ndarray) -> float:
     std = returns.std(ddof=1)
@@ -62,15 +64,8 @@ def load_returns(
     r = r[valid]
 
     ungated = r.values
-    if gating_mode == "hard":
-        # Hard gate: full skip when risk exceeds threshold.
-        gated = r.where(p <= gate_threshold, 0.0).values
-    elif gating_mode == "soft":
-        # Soft gate: smoothly scale exposure from threshold to full-off at 1.0.
-        scale = 1.0 - np.clip((p.values - gate_threshold) / max(1e-8, (1.0 - gate_threshold)), 0.0, 1.0)
-        gated = r.values * scale
-    else:
-        raise ValueError(f"Unknown gating_mode: {gating_mode}")
+    gated_series = apply_gating(r, p, gate_threshold, gating_mode)
+    gated = gated_series.values
     return gated, ungated
 
 

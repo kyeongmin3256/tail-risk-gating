@@ -8,8 +8,15 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score, roc_curve
 
+from src.config import load_config
+from src.evaluation.gating import (
+    STRADDLE_BH_LABEL,
+    apply_gating,
+    gated_strategy_label,
+    gating_config_for,
+)
+
 THRESHOLDS = [2, 4, 6, 8]
-GATE_THRESHOLD = 0.15
 EQUITY_SAMPLE = 10
 
 FEATURE_LABELS = {
@@ -98,14 +105,17 @@ def _build_fold_stats(fold_df: pd.DataFrame, preds: pd.Series, actuals: pd.Serie
     return rows
 
 
-def _build_equity_curve(preds: pd.Series, fwd: pd.Series) -> tuple[list[dict], list[dict]]:
+def _build_equity_curve(
+    preds: pd.Series,
+    fwd: pd.Series,
+    gate_threshold: float,
+    mode: str,
+) -> tuple[list[dict], list[dict]]:
     common = preds.index.intersection(fwd.index)
     p = preds.loc[common]
     r = fwd.loc[common]
     ungated_cum = (1 + r).cumprod()
-    gate_mask = p <= GATE_THRESHOLD
-    gated_r = r.copy()
-    gated_r[~gate_mask] = 0.0
+    gated_r = apply_gating(r, p, gate_threshold, mode)
     gated_cum = (1 + gated_r).cumprod()
     ungated_cum /= ungated_cum.iloc[0]
     gated_cum /= gated_cum.iloc[0]
@@ -166,7 +176,15 @@ def _to_summary(row: pd.Series, n_total: int) -> dict:
     }
 
 
-def process_threshold(t: int, fwd_returns: pd.Series, root_dir: Path) -> dict:
+def _baseline_row(bt_df: pd.DataFrame) -> pd.Series:
+    for label in (STRADDLE_BH_LABEL, "ungated (always trade)"):
+        rows = bt_df[bt_df["strategy"] == label]
+        if len(rows):
+            return rows.iloc[0]
+    return bt_df.iloc[0]
+
+
+def process_threshold(t: int, fwd_returns: pd.Series, root_dir: Path, config: dict) -> dict:
     out_dir = root_dir / f"outputs/threshold_-{t}"
     summary = pd.read_csv(out_dir / "summary.csv", header=None, index_col=0).squeeze()
     preds_cal = pd.read_csv(out_dir / "wf_predictions_calibrated.csv", index_col=0, parse_dates=True).squeeze()
@@ -241,21 +259,61 @@ def process_threshold(t: int, fwd_returns: pd.Series, root_dir: Path) -> dict:
         for feat, importance in mean_abs.items()
     ]
 
-    ungated_row = bt_df[bt_df["strategy"].str.startswith("ungated")].iloc[0]
-    gated_candidates = bt_df[bt_df["gate_threshold"].notna()].copy()
-    gated_row = None
-    if len(gated_candidates) > 0:
-        closest = (gated_candidates["gate_threshold"] - GATE_THRESHOLD).abs().idxmin()
-        gated_row = gated_candidates.loc[closest]
+    gating_cfg = gating_config_for(t, config)
+    gate_mode = str(gating_cfg["mode"])
+    gate_threshold = float(gating_cfg["gate_threshold"])
 
-    n_total = int(_safe(ungated_row, "n_days", len(preds_raw)))
-    ungated_summary = _to_summary(ungated_row, n_total)
-    gated_summary = _to_summary(gated_row, n_total) if gated_row is not None else ungated_summary
+    primary_path = out_dir / "gating_primary.csv"
+    if primary_path.exists():
+        primary_df = pd.read_csv(primary_path)
+        baseline_row = _baseline_row(primary_df)
+        gated_rows = primary_df[primary_df["strategy"] != baseline_row["strategy"]]
+        gated_row = gated_rows.iloc[0] if len(gated_rows) else baseline_row
+    else:
+        baseline_row = _baseline_row(bt_df)
+        gated_candidates = bt_df[bt_df["gate_threshold"].notna()].copy()
+        if len(gated_candidates) > 0:
+            closest = (gated_candidates["gate_threshold"] - gate_threshold).abs().idxmin()
+            gated_row = gated_candidates.loc[closest]
+        else:
+            fwd = fwd_returns.reindex(preds_cal.index).dropna()
+            gated_returns = apply_gating(fwd, preds_cal.loc[fwd.index], gate_threshold, gate_mode)
+            gated_row = pd.Series(
+                {
+                    "strategy": gated_strategy_label(gate_mode, gate_threshold),
+                    "total_return": float((1 + gated_returns).prod() - 1),
+                    "sharpe": float(
+                        gated_returns.mean() / gated_returns.std() * np.sqrt(252)
+                        if gated_returns.std() > 0
+                        else 0
+                    ),
+                    "max_drawdown": float(
+                        ((1 + gated_returns).cumprod() / (1 + gated_returns).cumprod().cummax() - 1).min()
+                    ),
+                    "n_days": len(gated_returns),
+                    "days_skipped": int((gated_returns == 0).sum()),
+                }
+            )
+
+    n_total = int(_safe(baseline_row, "n_days", len(preds_raw)))
+    baseline_summary = _to_summary(baseline_row, n_total)
+    gated_summary = _to_summary(gated_row, n_total)
     fwd = fwd_returns.reindex(preds_cal.index).dropna()
-    equity_curve, drawdown_series = _build_equity_curve(preds_cal, fwd)
+    equity_curve, drawdown_series = _build_equity_curve(
+        preds_cal.loc[fwd.index],
+        fwd,
+        gate_threshold,
+        gate_mode,
+    )
 
     backtest_results = {
-        "summary": {"gated": gated_summary, "ungated": ungated_summary},
+        "gatingPolicy": {
+            "mode": gate_mode,
+            "gateThreshold": gate_threshold,
+            "label": gated_strategy_label(gate_mode, gate_threshold),
+            "benchmarkLabel": STRADDLE_BH_LABEL,
+        },
+        "summary": {"gated": gated_summary, "baseline": baseline_summary},
         "equityCurve": equity_curve,
         "drawdownSeries": drawdown_series,
     }
@@ -269,10 +327,13 @@ def process_threshold(t: int, fwd_returns: pd.Series, root_dir: Path) -> dict:
 
 
 def load_dashboard_data(root_dir: Path) -> dict:
+    config = load_config(root_dir / "config" / "config.yaml")
     fwd_returns = pd.read_csv(
         root_dir / "data/processed/target_continuous.csv",
         index_col="date",
         parse_dates=True,
     ).squeeze()
-    data_by_threshold = {str(t): process_threshold(t, fwd_returns, root_dir) for t in THRESHOLDS}
+    data_by_threshold = {
+        str(t): process_threshold(t, fwd_returns, root_dir, config) for t in THRESHOLDS
+    }
     return {"thresholds": THRESHOLDS, "dataByThreshold": data_by_threshold}

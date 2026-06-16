@@ -8,12 +8,18 @@ Usage:
     raw_data = fetcher.fetch_all()
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import yfinance as yf
+
+if TYPE_CHECKING:
+    from src.data.store import MarketDataStore
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +27,23 @@ logger = logging.getLogger(__name__)
 class DataFetcher:
     """Downloads and caches raw market data from free sources."""
 
-    def __init__(self, config: dict, cache_dir: str | Path = "data/raw"):
+    def __init__(
+        self,
+        config: dict,
+        cache_dir: str | Path = "data/raw",
+        store: MarketDataStore | None = None,
+    ):
         """Initialize fetcher with config.
 
         Args:
             config: Project configuration dict.
             cache_dir: Directory to cache downloaded CSVs.
+            store: Optional PostgreSQL-backed market data store.
         """
         self.config = config
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.store = store
 
         self.start_date = config["data"]["start_date"]
         self.end_date = config["data"].get("end_date") or datetime.today().strftime(
@@ -67,6 +80,8 @@ class DataFetcher:
 
         df.index.name = "date"
         df.to_csv(cache_path)
+        if self.store is not None:
+            self.store.upsert_ohlcv(name, ticker, df)
         logger.info(f"  Saved {len(df)} rows to {cache_path}")
 
         return df
@@ -139,6 +154,8 @@ class DataFetcher:
         series.index.name = "date"
         series.name = name
         series.to_csv(cache_path)
+        if self.store is not None:
+            self.store.upsert_macro_series(name, series_id, series)
         logger.info(f"  Saved {len(series)} rows to {cache_path}")
 
         return series
@@ -168,14 +185,25 @@ class DataFetcher:
                 logger.warning(f"Failed to fetch {name} ({series_id}): {e}")
 
         logger.info(f"Fetched {len(data)} data sources successfully.")
+        if self.store is not None and data:
+            row_count = sum(len(v) for v in data.values())
+            self.store.record_ingestion("fetch_all", len(data), row_count)
         return data
 
-    def load_cached(self) -> dict[str, pd.DataFrame | pd.Series]:
-        """Load previously cached data from disk.
+    def load_cached(self, prefer_db: bool = True) -> dict[str, pd.DataFrame | pd.Series]:
+        """Load cached data, preferring PostgreSQL when available."""
+        if prefer_db and self.store is not None and self.store.has_data():
+            try:
+                data = self.store.load_all()
+                if data:
+                    return data
+            except Exception as exc:
+                logger.warning("Failed loading from PostgreSQL, using CSV cache: %s", exc)
 
-        Returns:
-            Dictionary mapping data names to DataFrames/Series.
-        """
+        return self._load_csv_cache()
+
+    def _load_csv_cache(self) -> dict[str, pd.DataFrame | pd.Series]:
+        """Load previously cached data from disk."""
         data = {}
         for csv_path in sorted(self.cache_dir.glob("*.csv")):
             name = csv_path.stem

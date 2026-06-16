@@ -13,6 +13,20 @@ TailCast is designed to answer one question each day:
 
 ## Core Results
 
+<!-- METRICS:START -->
+### Walk-forward gated vs Short Straddle B&H (-4% model bucket, hard @ 15%)
+
+- Sharpe: `1.9444 -> 1.8055` (**-7.14%**)
+- CVaR(95): `-0.0543 -> -0.0540` (**0.68% tail-risk reduction**)
+- Gate activity: `86` low-exposure days
+
+### Best full-sample profile (-2% bucket, soft @ 20%)
+
+- Sharpe: `1.9444 -> 2.0273` (**+4.26%**)
+- CVaR(95): `-0.0543 -> -0.0468` (**13.93% tail-risk reduction**)
+- OOT soft gate (-2% @ 20%, last 756 days): Sharpe delta `+0.1852` · CVaR improvement `0.00611`
+<!-- METRICS:END -->
+
 ### Walk-forward gated vs ungated (-4% model bucket)
 
 - Sharpe: `0.8912 -> 0.9406` (**+5.55%**)
@@ -49,7 +63,7 @@ Phase 4: FastAPI + React/Tailwind dashboard
 
 ## System Components
 
-- **Data**: Yahoo Finance + FRED ingestion with local caching
+- **Data**: Yahoo Finance + FRED ingestion with CSV cache and PostgreSQL persistence
 - **Features**: volatility term structure, credit stress, momentum, calendar regime context
 - **Model**: LightGBM classifier with class-imbalance handling
 - **Validation**: expanding-window walk-forward retraining
@@ -94,6 +108,16 @@ Run pipeline and training:
 ```bash
 python run_pipeline.py
 python run_training.py
+```
+
+PostgreSQL (optional, dual-write with CSV cache):
+
+```bash
+docker compose up -d db
+python3 scripts/init_db.py
+python3 scripts/migrate_csv_to_db.py      # import existing data/raw CSVs
+python3 run_pipeline.py --use-cache     # load from PostgreSQL when available
+python3 run_pipeline.py                 # fetch fresh data into CSV + PostgreSQL
 ```
 
 Run multi-threshold training:

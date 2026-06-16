@@ -14,4 +14,27 @@
 
 ## Current Status
 
-Model pipeline, significance testing, FastAPI serving, and React dashboard are complete. Next phase: soft-gating policy tuning and cloud deployment.
+Model pipeline, significance testing, FastAPI serving, and React dashboard are complete.
+
+**Recently added**
+- Shared soft/hard gating engine (`src/evaluation/gating.py`)
+- Per-threshold gating policy (`-2%` soft @ 0.20, `-4/-6/-8%` hard @ 0.15)
+- Short Straddle B&H benchmark labeling in backtests and dashboard
+- Docker Compose stack (API + frontend + Postgres)
+- `scripts/refresh_gating_primary.py` to regenerate gating summaries from existing model outputs
+
+**Next phase**
+- Cloud deployment (EC2/RDS or managed Postgres)
+- Auto-refresh README metrics from `gating_primary.csv`
+
+## PostgreSQL
+
+Raw market data can be persisted in PostgreSQL alongside CSV cache.
+
+```bash
+docker compose up -d db
+python3 scripts/init_db.py
+python3 scripts/migrate_csv_to_db.py   # one-time import from data/raw
+python3 run_pipeline.py --use-cache    # prefers PostgreSQL when populated
+python3 run_pipeline.py                # fetch + write CSV + PostgreSQL
+```

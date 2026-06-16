@@ -5,6 +5,8 @@ from pathlib import Path
 
 import yaml
 
+from src.data.store import database_url
+
 
 def load_config(config_path: str | None = None) -> dict:
     """Load configuration from YAML file.
@@ -27,5 +29,8 @@ def load_config(config_path: str | None = None) -> dict:
     fred_key = os.environ.get("FRED_API_KEY")
     if fred_key:
         config["data"]["fred_api_key"] = fred_key
+
+    # Expose resolved DB URL for scripts/services
+    config["database_url"] = database_url(config)
 
     return config

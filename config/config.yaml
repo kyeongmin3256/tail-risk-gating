@@ -78,3 +78,19 @@ database:
   name: "tailrisk"
   user: "tailrisk"
   password: "tailrisk"  # Change in production
+
+gating:
+  # Primary gating policy per loss-tolerance model (percent magnitude).
+  by_threshold:
+    "2":
+      mode: soft
+      gate_threshold: 0.20
+    "4":
+      mode: hard
+      gate_threshold: 0.15
+    "6":
+      mode: hard
+      gate_threshold: 0.15
+    "8":
+      mode: hard
+      gate_threshold: 0.15

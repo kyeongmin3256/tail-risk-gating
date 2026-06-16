@@ -165,7 +165,14 @@ def run_threshold(
 
     bt = StrategyBacktest(config)
     bt_results = bt.run(preds_bt, actuals_bt, fwd_returns)
+    primary_results = bt.run_primary(
+        cal_probs.loc[fwd_returns.index],
+        actuals_bt,
+        fwd_returns,
+        threshold_pct=abs(int(round(threshold * 100))),
+    )
     logger.info("\n" + format_backtest_report(bt_results))
+    logger.info("\n" + format_backtest_report(primary_results))
 
     # ── Step 7: Save outputs ───────────────────────────────────────
     predictions.to_csv(out_dir / "wf_predictions.csv")
@@ -174,6 +181,7 @@ def run_threshold(
 
     pd.DataFrame(wf_result.fold_stats).to_csv(out_dir / "fold_stats.csv", index=False)
     bt_results.to_csv(out_dir / "backtest_results.csv", index=False)
+    primary_results.to_csv(out_dir / "gating_primary.csv", index=False)
 
     cal_curve = calibration_curve(actuals.values, predictions.values)
     cal_curve.to_csv(out_dir / "calibration_curve.csv", index=False)

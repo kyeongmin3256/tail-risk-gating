@@ -87,6 +87,22 @@ function RocTooltip({ active, payload }) {
   )
 }
 
+function CalibrationTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const pt = payload[0]?.payload
+  if (!pt) return null
+  return (
+    <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-xs font-mono text-white/70">
+        Predicted: {pt.predicted?.toFixed(3)} · Observed: {pt.observed?.toFixed(3)}
+      </p>
+      <p className="text-[10px] font-mono text-white/35 mt-1">
+        Perfect calibration lies on the diagonal
+      </p>
+    </div>
+  )
+}
+
 export default function ModelMetrics({ data }) {
   const [tab, setTab] = useState('roc')
   const benchmarks = data.benchmarks || {}
@@ -94,6 +110,11 @@ export default function ModelMetrics({ data }) {
   const foldChartData = data.walkForwardFolds
     .filter(f => f.auc !== null)
     .map(f => ({ ...f }))
+
+  const calibrationChartData = (data.calibration?.predicted || []).map((predicted, i) => ({
+    predicted,
+    observed: data.calibration.observed[i],
+  }))
 
   const avgAuc = foldChartData.length > 0
     ? foldChartData.reduce((s, f) => s + f.auc, 0) / foldChartData.length
@@ -106,7 +127,7 @@ export default function ModelMetrics({ data }) {
           Model Performance
         </h2>
         <div className="flex bg-white/[0.04] rounded-lg p-0.5">
-          {['roc', 'folds'].map((t) => (
+          {['roc', 'calibration', 'folds'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -116,7 +137,7 @@ export default function ModelMetrics({ data }) {
                   : 'text-white/30 hover:text-white/50'
               }`}
             >
-              {t === 'roc' ? 'ROC Curve' : 'Walk-Forward'}
+              {t === 'roc' ? 'ROC Curve' : t === 'calibration' ? 'Calibration' : 'Walk-Forward'}
             </button>
           ))}
         </div>
@@ -208,6 +229,64 @@ export default function ModelMetrics({ data }) {
                 activeDot={{ r: 5, stroke: '#06d6d0', strokeWidth: 2, fill: '#0a0b0f' }}
               />
             </AreaChart>
+          </ResponsiveContainer>
+        ) : tab === 'calibration' ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={calibrationChartData}
+              margin={{ top: 8, right: 16, bottom: 24, left: 56 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis
+                dataKey="predicted"
+                type="number"
+                domain={[0, 1]}
+                tickFormatter={(v) => v.toFixed(1)}
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+                label={{
+                  value: 'Mean Predicted Probability',
+                  position: 'insideBottom',
+                  offset: -8,
+                  style: { fill: 'rgba(255,255,255,0.25)', fontSize: 10 },
+                }}
+              />
+              <YAxis
+                dataKey="observed"
+                type="number"
+                domain={[0, 1]}
+                width={48}
+                tickFormatter={(v) => v.toFixed(1)}
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+                label={{
+                  value: 'Observed Frequency',
+                  angle: -90,
+                  position: 'insideLeft',
+                  offset: 12,
+                  style: { fill: 'rgba(255,255,255,0.25)', fontSize: 10 },
+                }}
+              />
+              <Tooltip content={<CalibrationTooltip />} />
+              <ReferenceLine
+                segment={[{ x: 0, y: 0 }, { x: 1, y: 1 }]}
+                stroke="rgba(255,255,255,0.15)"
+                strokeDasharray="4 4"
+                label={{
+                  value: 'Perfect calibration',
+                  position: 'insideTopLeft',
+                  fill: 'rgba(255,255,255,0.25)',
+                  fontSize: 9,
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="observed"
+                stroke="#06d6d0"
+                strokeWidth={2}
+                dot={{ r: 4, fill: '#06d6d0', stroke: '#0a0b0f', strokeWidth: 2 }}
+                activeDot={{ r: 6, stroke: '#06d6d0', strokeWidth: 2, fill: '#fff' }}
+                name="Observed"
+              />
+            </LineChart>
           </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

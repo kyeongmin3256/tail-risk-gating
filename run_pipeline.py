@@ -15,6 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.config import load_config
+from src.data.db import build_store
 from src.data.fetcher import DataFetcher
 from src.features.pipeline import FeaturePipeline
 from src.labels.strategy import compute_labels
@@ -31,6 +32,11 @@ def main():
     parser = argparse.ArgumentParser(description="Tail Risk Gating - Phase 1 Pipeline")
     parser.add_argument(
         "--use-cache", action="store_true", help="Use cached data instead of fetching"
+    )
+    parser.add_argument(
+        "--no-db",
+        action="store_true",
+        help="Disable PostgreSQL reads/writes even if configured",
     )
     parser.add_argument(
         "--threshold",
@@ -50,15 +56,17 @@ def main():
     config = load_config()
     threshold = args.threshold or config["strategy"]["default_threshold"]
     horizon = args.horizon or config["strategy"]["default_horizon"]
+    store = None if args.no_db else build_store(config)
 
     logger.info("=" * 60)
     logger.info("TAIL RISK GATING SYSTEM - Phase 1 Pipeline")
     logger.info(f"  Threshold: {threshold:.1%}")
     logger.info(f"  Horizon: {horizon} trading days")
+    logger.info(f"  PostgreSQL: {'enabled' if store else 'disabled'}")
     logger.info("=" * 60)
 
     # Step 1: Get data
-    fetcher = DataFetcher(config)
+    fetcher = DataFetcher(config, store=store)
     if args.use_cache:
         logger.info("Loading cached data...")
         raw_data = fetcher.load_cached()
