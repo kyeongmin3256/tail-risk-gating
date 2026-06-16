@@ -4,22 +4,64 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 
-function MetricCard({ label, value, sublabel, accent = false }) {
+const BENCHMARK_HINTS = {
+  'ROC-AUC': 'Random classifier baseline: 0.50',
+  'Avg Precision': 'Positive-class base rate (random baseline)',
+  'Brier Score': 'Naive constant-probability baseline',
+}
+
+function MetricCard({ label, value, sublabel, benchmark, accent = false }) {
+  const [hovered, setHovered] = useState(false)
+  const benchDelta = benchmark != null ? value - benchmark : null
+  const improved = benchDelta != null && (
+    label === 'Brier Score' ? benchDelta < 0 : benchDelta > 0
+  )
+
   return (
-    <div className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.04]">
+    <div
+      className="relative bg-white/[0.02] rounded-lg p-3 border border-white/[0.04] transition-colors hover:border-white/[0.12] hover:bg-white/[0.04] cursor-default"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider">{label}</p>
       <p className={`text-2xl font-mono font-bold mt-1 ${accent ? 'text-accent-cyan' : 'text-white/90'}`}>
         {value}
       </p>
       {sublabel && <p className="text-[10px] font-mono text-white/20 mt-0.5">{sublabel}</p>}
+      {benchmark != null && (
+        <p className="text-[10px] font-mono text-white/25 mt-1">
+          vs {benchmark.toFixed(label === 'Brier Score' ? 3 : 2)} baseline
+          {benchDelta != null && (
+            <span className={improved ? ' text-accent-cyan ml-1' : ' text-white/35 ml-1'}>
+              ({benchDelta > 0 ? '+' : ''}{benchDelta.toFixed(label === 'Brier Score' ? 3 : 2)})
+            </span>
+          )}
+        </p>
+      )}
+
+      {hovered && (
+        <div className="absolute z-20 left-0 right-0 top-full mt-2 bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl pointer-events-none">
+          <p className="text-[10px] font-mono text-white/50 leading-relaxed">
+            {BENCHMARK_HINTS[label] || 'Walk-forward out-of-sample metric'}
+          </p>
+          {benchmark != null && (
+            <p className="text-[10px] font-mono text-accent-cyan/80 mt-1">
+              Model {value} · Baseline {benchmark.toFixed(label === 'Brier Score' ? 3 : 2)}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function CustomTooltip({ active, payload }) {
+function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      {label != null && (
+        <p className="text-[10px] font-mono text-white/40 mb-1">{label}</p>
+      )}
       {payload.map((entry, i) => (
         <p key={i} className="text-xs font-mono" style={{ color: entry.color }}>
           {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(3) : entry.value}
@@ -29,10 +71,26 @@ function CustomTooltip({ active, payload }) {
   )
 }
 
+function RocTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const pt = payload[0]?.payload
+  if (!pt) return null
+  return (
+    <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-xs font-mono text-white/70">
+        FPR: {pt.fpr?.toFixed(3)} · TPR: {pt.tpr?.toFixed(3)}
+      </p>
+      <p className="text-[10px] font-mono text-white/35 mt-1">
+        Random baseline on diagonal (0.50 AUC)
+      </p>
+    </div>
+  )
+}
+
 export default function ModelMetrics({ data }) {
   const [tab, setTab] = useState('roc')
+  const benchmarks = data.benchmarks || {}
 
-  // Build fold chart data — skip folds with null AUC
   const foldChartData = data.walkForwardFolds
     .filter(f => f.auc !== null)
     .map(f => ({ ...f }))
@@ -64,44 +122,81 @@ export default function ModelMetrics({ data }) {
         </div>
       </div>
 
-      {/* Key Metrics Row */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <MetricCard label="ROC-AUC" value={data.rocAuc.toFixed(2)} sublabel="Walk-forward OOS" accent />
-        <MetricCard label="Avg Precision" value={data.avgPrecision.toFixed(2)} sublabel="PR-AUC" />
-        <MetricCard label="Brier Score" value={data.brierScore.toFixed(3)} sublabel="Lower = better" />
+        <MetricCard
+          label="ROC-AUC"
+          value={data.rocAuc.toFixed(2)}
+          sublabel="Walk-forward OOS"
+          benchmark={benchmarks.rocAuc ?? 0.5}
+          accent
+        />
+        <MetricCard
+          label="Avg Precision"
+          value={data.avgPrecision.toFixed(2)}
+          sublabel="PR-AUC"
+          benchmark={benchmarks.avgPrecision ?? 0.07}
+        />
+        <MetricCard
+          label="Brier Score"
+          value={data.brierScore.toFixed(3)}
+          sublabel="Lower = better"
+          benchmark={benchmarks.brierScore ?? 0.061}
+        />
       </div>
 
-      {/* Chart */}
-      <div className="h-[240px]">
+      <div className="h-[260px]">
         {tab === 'roc' ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data.rocCurve}>
+            <AreaChart
+              data={data.rocCurve}
+              margin={{ top: 8, right: 16, bottom: 24, left: 56 }}
+            >
               <defs>
                 <linearGradient id="rocFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#06d6d0" stopOpacity={0.15} />
                   <stop offset="100%" stopColor="#06d6d0" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis
                 dataKey="fpr"
                 type="number"
                 domain={[0, 1]}
                 tickFormatter={(v) => v.toFixed(1)}
-                label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -5, style: { fill: 'rgba(255,255,255,0.25)', fontSize: 10 } }}
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+                label={{
+                  value: 'False Positive Rate',
+                  position: 'insideBottom',
+                  offset: -8,
+                  style: { fill: 'rgba(255,255,255,0.25)', fontSize: 10 },
+                }}
               />
               <YAxis
                 dataKey="tpr"
                 type="number"
                 domain={[0, 1]}
+                width={48}
                 tickFormatter={(v) => v.toFixed(1)}
-                label={{ value: 'True Positive Rate', angle: -90, position: 'insideLeft', offset: 10, style: { fill: 'rgba(255,255,255,0.25)', fontSize: 10 } }}
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+                label={{
+                  value: 'True Positive Rate',
+                  angle: -90,
+                  position: 'insideLeft',
+                  offset: 12,
+                  style: { fill: 'rgba(255,255,255,0.25)', fontSize: 10 },
+                }}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<RocTooltip />} />
               <ReferenceLine
                 segment={[{ x: 0, y: 0 }, { x: 1, y: 1 }]}
-                stroke="rgba(255,255,255,0.1)"
+                stroke="rgba(255,255,255,0.15)"
                 strokeDasharray="4 4"
+                label={{
+                  value: 'Random (0.50)',
+                  position: 'insideTopLeft',
+                  fill: 'rgba(255,255,255,0.25)',
+                  fontSize: 9,
+                }}
               />
               <Area
                 type="monotone"
@@ -110,24 +205,46 @@ export default function ModelMetrics({ data }) {
                 strokeWidth={2}
                 fill="url(#rocFill)"
                 name="TPR"
+                activeDot={{ r: 5, stroke: '#06d6d0', strokeWidth: 2, fill: '#0a0b0f' }}
               />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={foldChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" tick={{ fontSize: 9 }} interval={Math.floor(foldChartData.length / 6)} />
-              <YAxis domain={[0.4, 1.0]} tickFormatter={(v) => v.toFixed(1)} />
-              <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={avgAuc} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+            <LineChart
+              data={foldChartData}
+              margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis
+                dataKey="period"
+                tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.35)' }}
+                interval={Math.floor(foldChartData.length / 6)}
+              />
+              <YAxis
+                domain={[0.4, 1.0]}
+                tickFormatter={(v) => v.toFixed(1)}
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+              />
+              <Tooltip content={<ChartTooltip />} />
+              <ReferenceLine
+                y={avgAuc}
+                stroke="rgba(255,255,255,0.15)"
+                strokeDasharray="4 4"
+                label={{
+                  value: `Avg ${avgAuc.toFixed(2)}`,
+                  position: 'insideTopRight',
+                  fill: 'rgba(255,255,255,0.25)',
+                  fontSize: 9,
+                }}
+              />
               <Line
                 type="monotone"
                 dataKey="auc"
                 stroke="#06d6d0"
                 strokeWidth={2}
                 dot={{ r: 3, fill: '#06d6d0', stroke: '#0a0b0f', strokeWidth: 2 }}
-                activeDot={{ r: 6 }}
+                activeDot={{ r: 6, stroke: '#06d6d0', strokeWidth: 2, fill: '#fff' }}
                 name="AUC"
               />
             </LineChart>
@@ -135,7 +252,6 @@ export default function ModelMetrics({ data }) {
         )}
       </div>
 
-      {/* Fold table */}
       {tab === 'folds' && (
         <div className="mt-4 overflow-x-auto max-h-[200px] overflow-y-auto">
           <table className="w-full text-xs font-mono">

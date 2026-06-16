@@ -3,30 +3,42 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
 
-function CustomTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null
-  const d = payload[0].payload
-  return (
-    <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-xs font-semibold text-white/90">{d.feature}</p>
-      <p className="text-xs font-mono text-accent-cyan mt-1">
-        SHAP: {d.importance.toFixed(4)}
-      </p>
-      <p className="text-[10px] font-mono text-white/40 mt-0.5">
-        Direction: {d.direction.replace('_', ' ')}
-      </p>
-    </div>
-  )
-}
-
 const BAR_COLORS = {
   risk_increasing: '#ff3b5c',
   risk_decreasing: '#00e5a0',
   mixed: '#ffb020',
 }
 
+const DIRECTION_LABELS = {
+  risk_increasing: 'increases tail risk',
+  risk_decreasing: 'decreases tail risk',
+  mixed: 'mixed effect',
+}
+
+function ShapTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  const color = BAR_COLORS[d.direction] || BAR_COLORS.mixed
+  return (
+    <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-xs font-semibold text-white/90">{d.feature}</p>
+      <p className="text-xs font-mono mt-1" style={{ color }}>
+        |SHAP|: {d.importance.toFixed(4)}
+      </p>
+      <p className="text-[10px] font-mono text-white/40 mt-0.5">
+        {DIRECTION_LABELS[d.direction] || d.direction}
+      </p>
+    </div>
+  )
+}
+
+function barColor(direction) {
+  return BAR_COLORS[direction] ?? BAR_COLORS.mixed
+}
+
 export default function ShapChart({ data }) {
   const [showAll, setShowAll] = useState(false)
+  const [hoveredFeature, setHoveredFeature] = useState(null)
   const display = showAll ? data : data.slice(0, 10)
   const maxVal = Math.max(...display.map(d => d.importance))
 
@@ -49,15 +61,17 @@ export default function ShapChart({ data }) {
         </button>
       </div>
 
-      {/* Legend */}
       <div className="flex gap-4 mb-4">
         {[
-          { label: 'Risk ↑', color: '#ff3b5c' },
-          { label: 'Risk ↓', color: '#00e5a0' },
-          { label: 'Mixed', color: '#ffb020' },
-        ].map(({ label, color }) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
+          { key: 'risk_increasing', label: 'Risk ↑' },
+          { key: 'risk_decreasing', label: 'Risk ↓' },
+          { key: 'mixed', label: 'Mixed' },
+        ].map(({ key, label }) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <span
+              className="w-2.5 h-2.5 rounded-sm"
+              style={{ backgroundColor: BAR_COLORS[key] }}
+            />
             <span className="text-[10px] font-mono text-white/35">{label}</span>
           </div>
         ))}
@@ -65,12 +79,17 @@ export default function ShapChart({ data }) {
 
       <div className={showAll ? 'h-[400px]' : 'h-[320px]'}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={display} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+          <BarChart
+            data={display}
+            layout="vertical"
+            margin={{ top: 0, right: 16, bottom: 0, left: 4 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.06)" />
             <XAxis
               type="number"
               domain={[0, maxVal * 1.1]}
               tickFormatter={(v) => v.toFixed(3)}
+              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
             />
             <YAxis
               type="category"
@@ -78,10 +97,20 @@ export default function ShapChart({ data }) {
               width={130}
               tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.5)' }}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-            <Bar dataKey="importance" radius={[0, 4, 4, 0]} maxBarSize={20}>
-              {display.map((entry, i) => (
-                <Cell key={i} fill={BAR_COLORS[entry.direction] || '#3b82f6'} fillOpacity={0.8} />
+            <Tooltip content={<ShapTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+            <Bar
+              dataKey="importance"
+              radius={[0, 4, 4, 0]}
+              maxBarSize={20}
+              onMouseLeave={() => setHoveredFeature(null)}
+            >
+              {display.map((entry) => (
+                <Cell
+                  key={entry.feature}
+                  fill={barColor(entry.direction)}
+                  fillOpacity={hoveredFeature && hoveredFeature !== entry.feature ? 0.35 : 0.85}
+                  onMouseEnter={() => setHoveredFeature(entry.feature)}
+                />
               ))}
             </Bar>
           </BarChart>

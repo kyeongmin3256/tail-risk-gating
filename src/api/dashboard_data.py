@@ -210,10 +210,17 @@ def process_threshold(t: int, fwd_returns: pd.Series, root_dir: Path) -> dict:
     a_arr = actuals.loc[common].values.astype(float)
     roc_pts = _build_roc_curve(a_arr, p_arr) if len(np.unique(a_arr)) > 1 else []
     folds_data = _build_fold_stats(fold_df, preds_raw, actuals)
+    positive_rate = float(summary.get("raw_positive_rate", summary.get("positive_rate", 0.065)))
     model_metrics = {
         "rocAuc": round(float(summary.get("raw_roc_auc", 0)), 4),
         "avgPrecision": round(float(summary.get("raw_avg_precision", 0)), 4),
         "brierScore": round(float(summary.get("raw_brier_score", 0)), 4),
+        "benchmarks": {
+            "rocAuc": 0.5,
+            "avgPrecision": round(positive_rate, 4),
+            "brierScore": round(positive_rate * (1 - positive_rate), 4),
+            "positiveRate": round(positive_rate, 4),
+        },
         "rocCurve": roc_pts,
         "walkForwardFolds": folds_data,
         "calibration": {

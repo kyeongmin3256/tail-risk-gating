@@ -240,10 +240,18 @@ def process_threshold(t: int, fwd_returns: pd.Series) -> dict:
         "observed": [round(float(v), 4) for v in cal_df["mean_actual"]],
     }
 
+    positive_rate = float(summary.get("raw_positive_rate", summary.get("positive_rate", 0.065)))
+
     model_metrics = {
         "rocAuc": round(roc_auc_val, 4),
         "avgPrecision": round(avg_prec_val, 4),
         "brierScore": round(brier_val, 4),
+        "benchmarks": {
+            "rocAuc": 0.5,
+            "avgPrecision": round(positive_rate, 4),
+            "brierScore": round(positive_rate * (1 - positive_rate), 4),
+            "positiveRate": round(positive_rate, 4),
+        },
         "rocCurve": roc_pts,
         "walkForwardFolds": folds_data,
         "calibration": cal_pts,
