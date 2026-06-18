@@ -43,6 +43,11 @@ Thumbs.db
 .env
 *.env
 
+# Scheduler logs
+logs/
+logs/*.log
+logs/*.json
+
 # Docker
 pgdata/
 
