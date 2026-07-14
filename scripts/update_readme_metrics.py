@@ -73,10 +73,17 @@ def summarize_threshold(
 
     primary_path = ROOT / f"outputs/threshold_-{threshold}/gating_primary.csv"
     days_gated = int((gated == 0).sum())
+    n_days = int(len(common))
     if primary_path.exists():
         primary = pd.read_csv(primary_path)
+        bh_row = primary[primary["strategy"] == STRADDLE_BH_LABEL].iloc[0]
         gated_row = primary[primary["strategy"] != STRADDLE_BH_LABEL].iloc[0]
         days_gated = int(gated_row.get("days_skipped", days_gated))
+        sharpe_u = float(bh_row["sharpe"])
+        sharpe_g = float(gated_row["sharpe"])
+        cvar_u = float(bh_row["cvar_5pct"])
+        cvar_g = float(gated_row["cvar_5pct"])
+        n_days = int(bh_row.get("n_days", n_days))
 
     return {
         "threshold": threshold,
@@ -89,6 +96,7 @@ def summarize_threshold(
         "cvar_gated": cvar_g,
         "cvar_reduction_pct": _risk_reduction(cvar_u, cvar_g),
         "days_gated": days_gated,
+        "n_days": n_days,
     }
 
 
@@ -99,33 +107,45 @@ def build_metrics_block(config: dict) -> str:
         parse_dates=True,
     ).squeeze()
 
-    headline = summarize_threshold(4, fwd, config)
     best = summarize_threshold(2, fwd, config)
 
+    oot_sharpe = None
+    oot_cvar = None
     oot_path = ROOT / "data/model_outputs/significance_oot_t2_soft.csv"
-    oot_line = ""
     if oot_path.exists():
         oot = pd.read_csv(oot_path)
         best_oot = oot.loc[oot["gate_threshold"] == 0.2]
         if len(best_oot):
             row = best_oot.iloc[0]
-            oot_line = (
-                f"- OOT soft gate (-2% @ 20%, last 756 days): Sharpe delta "
-                f"`{row['sharpe_diff']:+.4f}` · CVaR improvement `{row['cvar_improvement']:.5f}`"
-            )
+            oot_sharpe = float(row["sharpe_diff"])
+            oot_cvar = float(row["cvar_improvement"])
+
+    oot_section = ""
+    if oot_sharpe is not None and oot_cvar is not None:
+        oot_section = f"""
+### Out-of-sample check — soft gate (-2% @ 20%, last 756 days)
+
+| Diagnostic | Value |
+|------------|-------|
+| Sharpe delta (gated − ungated) | **{oot_sharpe:+.2f}** |
+| CVaR improvement | **{oot_cvar:+.3f}** |
+"""
 
     return f"""{START}
-### Walk-forward gated vs Short Straddle B&H (-4% model bucket, {headline['mode']} @ {headline['gate_threshold']:.0%})
+### Best full-sample profile — soft gate (-2% @ 20%) vs Short Straddle B&H
 
-- Sharpe: `{headline['sharpe_ungated']:.4f} -> {headline['sharpe_gated']:.4f}` (**{headline['sharpe_pct']:+.2f}%**)
-- CVaR(95): `{headline['cvar_ungated']:.4f} -> {headline['cvar_gated']:.4f}` (**{headline['cvar_reduction_pct']:.2f}% tail-risk reduction**)
-- Gate activity: `{headline['days_gated']}` low-exposure days
+Walk-forward evaluation on the short ATM SPY straddle proxy (~{best['n_days']:,} days).
 
-### Best full-sample profile (-2% bucket, soft @ 20%)
+| Metric | Ungated (B&H) | Gated | Change |
+|--------|---------------|-------|--------|
+| Sharpe | {best['sharpe_ungated']:.2f} | **{best['sharpe_gated']:.2f}** | **{best['sharpe_pct']:+.1f}%** |
+| CVaR (95%) | {best['cvar_ungated']*100:.2f}% | **{best['cvar_gated']*100:.2f}%** | **{best['cvar_reduction_pct']:.0f}%** tail-risk reduction |
+{oot_section}
+### Headline vs deeper buckets
 
-- Sharpe: `{best['sharpe_ungated']:.4f} -> {best['sharpe_gated']:.4f}` (**{best['sharpe_pct']:+.2f}%**)
-- CVaR(95): `{best['cvar_ungated']:.4f} -> {best['cvar_gated']:.4f}` (**{best['cvar_reduction_pct']:.2f}% tail-risk reduction**)
-{oot_line}
+Deeper loss buckets (-4% and below) use a **hard** gate @ 15%. They are useful stress labels for the dashboard, but the **resume / portfolio headline** is the **-2% soft @ 20%** profile above (best risk-adjusted gated-vs-ungated tradeoff in current artifacts).
+
+Artifacts: `outputs/threshold_-2/gating_primary.csv`, `data/model_outputs/significance_oot_t2_soft.csv`, `data/model_outputs/significance_sweep_t2_soft.csv`
 {END}"""
 
 

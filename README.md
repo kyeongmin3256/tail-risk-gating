@@ -1,14 +1,92 @@
 # TailCast
 
-ML-driven tail-risk gating for short-volatility and macro allocation strategies.
+Calibrated machine learning for **conditional tail-loss probability** — and deterministic trade gating — for short-volatility strategies.
 
-TailCast estimates daily conditional tail-loss probability from market features and converts it into deterministic gating actions: trade, reduce exposure, or move to cash.
+> *Should risk be taken today, given current tail-risk conditions?*
+
+TailCast turns daily market features into a calibrated `tail_risk_prob`, then maps that probability into **trade / reduce / cash** actions for a short ATM SPY straddle proxy.
+
+---
+
+## Resume Highlights
+
+**TailCast** — *Calibrated ML for Conditional Loss Probability & Trade Gating* | Sep. 2025 – Present
+
+- Built a daily trade-gating signal that converts calibrated tail-loss probabilities into deterministic reduce/skip actions for short-volatility strategies.
+- Built a Python + PostgreSQL data pipeline (pandas) to ingest and validate **18+ years** of market data across **9 instruments**, with CSV cache fallback and Dockerized API/dashboard serving.
+- Developed calibrated **LightGBM** classifiers (isotonic / Platt) estimating conditional tail-loss probabilities for short-vol regimes.
+- Engineered **25 predictive features** (volatility term structure, credit stress, momentum, calendar effects) with NumPy/SciPy.
+- Implemented expanding-window **walk-forward** backtesting with **SHAP** explainability and multi-threshold models (**-2% / -4% / -6% / -8%**); soft gating (**-2% @ 20%**) improved gated-vs-ungated Sharpe by **+4.3%** and reduced CVaR(95) by **14%** on a short-straddle proxy, with **+0.19** OOT Sharpe delta over the last **756** days.
+- Packaged results behind a **FastAPI + React** dashboard (SHAP drivers, equity / drawdown, gated vs ungated) and weekday model-refresh automation.
+
+---
 
 ## Problem
 
-Short-vol and carry strategies can fail abruptly when volatility regimes shift. TailCast answers:
+Short-vol and carry strategies earn steady premia until a volatility regime shift — then losses arrive abruptly. Rules based on raw VIX levels are brittle; uncalibrated ML scores are hard to turn into position sizing.
 
-> *Should risk be taken today, given current tail-risk conditions?*
+TailCast is built to answer an operational question with a probabilistic one:
+
+1. Estimate **P(tail loss | features)** under a chosen loss threshold.
+2. Calibrate so probability is usable as an exposure dial.
+3. Gate the strategy with a fixed, audited policy (soft or hard).
+
+---
+
+## Method
+
+| Stage | What happens |
+|-------|----------------|
+| Data | Yahoo Finance + FRED from **2006–** (SPY, VIX complex, SKEW, HYG, IEF, UUP, rates) |
+| Target | Forward short-straddle proxy P&L; binary labels at **-2 / -4 / -6 / -8%** loss buckets |
+| Model | **LightGBM** + expanding-window walk-forward (~quarterly retrain) |
+| Calibration | Isotonic / Platt so `tail_risk_prob` is decision-ready |
+| Gate | Soft (scale exposure) or hard (trade / skip) by threshold policy |
+| Eval | Gated vs ungated Sharpe / CVaR, SHAP, moving-block bootstrap + OOT window |
+
+**Default gate policy**
+
+| Loss bucket | Mode | Gate threshold |
+|-------------|------|----------------|
+| -2% | soft | 0.20 |
+| -4% / -6% / -8% | hard | 0.15 |
+
+---
+
+## Core Results
+
+<!-- METRICS:START -->
+### Best full-sample profile — soft gate (-2% @ 20%) vs Short Straddle B&H
+
+Walk-forward evaluation on the short ATM SPY straddle proxy (~2,990 days).
+
+| Metric | Ungated (B&H) | Gated | Change |
+|--------|---------------|-------|--------|
+| Sharpe | 1.94 | **2.03** | **+4.3%** |
+| CVaR (95%) | -3.31% | **-2.85%** | **14%** tail-risk reduction |
+
+### Out-of-sample check — soft gate (-2% @ 20%, last 756 days)
+
+| Diagnostic | Value |
+|------------|-------|
+| Sharpe delta (gated − ungated) | **+0.19** |
+| CVaR improvement | **+0.006** |
+
+### Headline vs deeper buckets
+
+Deeper loss buckets (-4% and below) use a **hard** gate @ 15%. They are useful stress labels for the dashboard, but the **resume / portfolio headline** is the **-2% soft @ 20%** profile above (best risk-adjusted gated-vs-ungated tradeoff in current artifacts).
+
+Artifacts: `outputs/threshold_-2/gating_primary.csv`, `data/model_outputs/significance_oot_t2_soft.csv`, `data/model_outputs/significance_sweep_t2_soft.csv`
+<!-- METRICS:END -->
+
+Refresh metrics after a retrain:
+
+```bash
+python3 scripts/refresh_gating_primary.py
+python3 scripts/update_readme_metrics.py
+```
+
+---
 
 ## Architecture
 
@@ -16,50 +94,50 @@ Short-vol and carry strategies can fail abruptly when volatility regimes shift. 
 Yahoo Finance + FRED
         │
         ▼
-Feature engineering (25+ signals)
+Feature engineering (25 signals)
         │
         ▼
-LightGBM + walk-forward validation + calibration
+LightGBM + walk-forward + calibration
         │
         ├── SHAP explainability
+        ├── Soft / hard gating engine
         ├── Gated vs ungated backtest
-        └── Significance testing (moving-block bootstrap)
+        └── Moving-block bootstrap + OOT tests
         │
         ▼
-FastAPI + React dashboard
+FastAPI  ──►  React dashboard (Vite + Tailwind + Recharts)
+   │
+   └── PostgreSQL (optional) + CSV cache
 ```
 
-## Results
-
-Walk-forward gated vs ungated evaluation (-4% loss threshold):
-
-| Metric | Ungated | Gated | Change |
-|--------|---------|-------|--------|
-| Sharpe | 0.89 | **0.94** | +5.6% |
-| CVaR (95%) | -1.05% | **-1.01%** | 4.2% tail-risk reduction |
-| Annual return | 5.79% | 5.90% | +1.9% |
-
-Out-of-sample significance (soft gate @ 0.20, -2% threshold): Sharpe delta **+0.19**, CVaR improvement **+0.006**.
+---
 
 ## Tech Stack
 
-- Python, LightGBM, pandas, NumPy/SciPy
-- Walk-forward retraining, isotonic/Platt calibration
-- SHAP feature attribution
-- FastAPI, React, Tailwind, Recharts
-- PostgreSQL (optional), Docker Compose
+- **Research:** Python, pandas, NumPy/SciPy, LightGBM, SHAP
+- **Validation:** expanding-window walk-forward, isotonic/Platt calibration, bootstrap significance
+- **Serving:** FastAPI, React, Tailwind, Recharts
+- **Infra:** Docker Compose, optional PostgreSQL, weekday `launchd` / shell daily refresh
+
+---
 
 ## Project Structure
 
 ```
 src/
-  data/         # market data ingestion
-  features/     # volatility, credit, momentum, calendar
+  data/         # market data ingestion + validation
+  features/     # vol term structure, credit, momentum, calendar
   models/       # LightGBM, walk-forward, calibration
-  evaluation/   # backtesting, gating engine, metrics
-  api/          # FastAPI serving layer
-frontend/       # dashboard UI
+  evaluation/   # backtest, gating engine, metrics, significance
+  api/          # FastAPI + dashboard payloads
+frontend/       # React dashboard
+outputs/        # per-threshold predictions + gating summaries
+data/model_outputs/   # wf predictions, SHAP, significance artifacts
+scripts/        # refresh, metrics, schedulers
+config/         # config.yaml
 ```
+
+---
 
 ## Quick Start
 
@@ -69,27 +147,35 @@ cd tail-risk-gating
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
+# optional: export FRED_API_KEY=...
 python run_pipeline.py
 python run_training.py
 ```
 
-Docker (API + dashboard + Postgres):
+Dashboard (API + UI + Postgres):
 
 ```bash
 docker compose up -d
-uvicorn src.api.main:app --reload --port 8000
 cd frontend && npm install && npm run dev
+# API: http://localhost:8000   UI: http://localhost:5173
 ```
 
-Daily model refresh:
+Weekday model refresh (fetch → train → `wf_predictions.csv`):
 
 ```bash
 ./scripts/run_daily_refresh.sh
+./scripts/setup_daily_refresh_launchd.sh   # macOS, default 06:00 weekdays
 ```
 
-## Downstream Integration
+---
 
-MacroShift consumes `tail_risk_prob` from `data/model_outputs/wf_predictions.csv` as an exposure overlay on ETF allocation. See MacroShift `docs/tailcast_integration_template.md`.
+## Scope
+
+- Research / paper-style evaluation on a **short-straddle proxy**, not live options execution.
+- Metrics drift when the data panel is refreshed; cite the artifacts above for a given claim.
+- Dashboard is a research monitor (probability, drivers, gated equity) — not a brokerage UI.
+
+---
 
 ## License
 
