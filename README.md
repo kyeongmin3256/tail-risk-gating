@@ -8,19 +8,6 @@ TailCast turns daily market features into a calibrated `tail_risk_prob`, then ma
 
 ---
 
-## Resume Highlights
-
-**TailCast** — *Calibrated ML for Conditional Loss Probability & Trade Gating* | Sep. 2025 – Present
-
-- Built a daily trade-gating signal that converts calibrated tail-loss probabilities into deterministic reduce/skip actions for short-volatility strategies.
-- Built a Python + PostgreSQL data pipeline (pandas) to ingest and validate **18+ years** of market data across **9 instruments**, with CSV cache fallback and Dockerized API/dashboard serving.
-- Developed calibrated **LightGBM** classifiers (isotonic / Platt) estimating conditional tail-loss probabilities for short-vol regimes.
-- Engineered **25 predictive features** (volatility term structure, credit stress, momentum, calendar effects) with NumPy/SciPy.
-- Implemented expanding-window **walk-forward** backtesting with **SHAP** explainability and multi-threshold models (**-2% / -4% / -6% / -8%**); soft gating (**-2% @ 20%**) improved gated-vs-ungated Sharpe by **+4.3%** and reduced CVaR(95) by **14%** on a short-straddle proxy, with **+0.19** OOT Sharpe delta over the last **756** days.
-- Packaged results behind a **FastAPI + React** dashboard (SHAP drivers, equity / drawdown, gated vs ungated) and weekday model-refresh automation.
-
----
-
 ## Problem
 
 Short-vol and carry strategies earn steady premia until a volatility regime shift — then losses arrive abruptly. Rules based on raw VIX levels are brittle; uncalibrated ML scores are hard to turn into position sizing.
