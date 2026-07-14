@@ -8,13 +8,11 @@ TailCast turns daily market features into a calibrated `tail_risk_prob`, then ma
 
 ### Dashboard demo
 
-~20s walkthrough of the research monitor — live tail-risk probability, loss-tolerance controls, SHAP drivers, and gated backtest panels.
 
-<video src="assets/tailcast-dashboard-demo.mp4" controls width="100%"></video>
 
-[Download MP4](assets/tailcast-dashboard-demo.mp4)
+https://github.com/user-attachments/assets/330d888f-6b56-4b8e-b698-6ce2ccd4094b
 
----
+
 
 ## Problem
 
