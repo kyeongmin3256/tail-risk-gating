@@ -17,7 +17,7 @@ STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_FILE="$LOG_DIR/daily_refresh_${STAMP}.log"
 
 # Optional: load FRED key from MacroShift .env if TailCast has no .env
-MACROSHIFT_ENV="${MACROSHIFT_ENV:-/Users/kyeongminkim/Desktop/Projects/MacroShift/.env}"
+MACROSHIFT_ENV="${MACROSHIFT_ENV:-$(cd "$ROOT_DIR/../MacroShift" 2>/dev/null && pwd || echo "/Users/kyeongminkim/Projects/MacroShift")/.env}"
 if [[ -f "$ROOT_DIR/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -53,15 +53,18 @@ echo "LOG_FILE=$LOG_FILE"
 echo "PIPELINE_ARGS=${PIPELINE_ARGS[*]:-none}"
 echo "FRED_API_KEY=${FRED_API_KEY:+set}"
 
-echo "[1/2] Phase 1 — data fetch + features + labels"
+echo "[1/3] Phase 1 — data fetch + features + labels"
 "$PYTHON" run_pipeline.py "${PIPELINE_ARGS[@]}"
 
-echo "[2/2] Phase 2 — walk-forward training → data/model_outputs/wf_predictions.csv"
+echo "[2/3] Phase 2 — walk-forward training → data/model_outputs/wf_predictions.csv"
 if ((${#TRAINING_ARGS[@]})); then
   "$PYTHON" run_training.py "${TRAINING_ARGS[@]}"
 else
   "$PYTHON" run_training.py
 fi
+
+echo "[3/3] Multi-threshold outputs → outputs/threshold_{N}/ (dashboard artifacts)"
+"$PYTHON" run_multi_threshold.py
 
 PRED_PATH="$ROOT_DIR/data/model_outputs/wf_predictions.csv"
 if [[ ! -f "$PRED_PATH" ]]; then
