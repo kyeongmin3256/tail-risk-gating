@@ -6,6 +6,14 @@ Calibrated machine learning for **conditional tail-loss probability** — and de
 
 TailCast turns daily market features into a calibrated `tail_risk_prob`, then maps that probability into **trade / reduce / cash** actions for a short ATM SPY straddle proxy.
 
+### Dashboard demo
+
+~20s walkthrough of the research monitor — live tail-risk probability, loss-tolerance controls, SHAP drivers, and gated backtest panels.
+
+<video src="assets/tailcast-dashboard-demo.mp4" controls width="100%"></video>
+
+[Download MP4](assets/tailcast-dashboard-demo.mp4)
+
 ---
 
 ## Problem
@@ -118,6 +126,7 @@ src/
   evaluation/   # backtest, gating engine, metrics, significance
   api/          # FastAPI + dashboard payloads
 frontend/       # React dashboard
+assets/         # README demo video
 outputs/        # per-threshold predictions + gating summaries
 data/model_outputs/   # wf predictions, SHAP, significance artifacts
 scripts/        # refresh, metrics, schedulers

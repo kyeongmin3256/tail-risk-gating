@@ -55,5 +55,10 @@ pgdata/
 frontend/node_modules/
 frontend/dist/
 
+# Local Playwright demo recorder tooling (committed video lives in assets/)
+demo/node_modules/
+demo/output/*.webm
+demo/package-lock.json
+
 # Local shell/editor artifacts
 .Rhistory
