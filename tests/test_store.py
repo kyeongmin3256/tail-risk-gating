@@ -1,7 +1,5 @@
 """Tests for PostgreSQL store helpers."""
 
-import os
-
 from src.config import load_config
 from src.data.store import database_url
 
