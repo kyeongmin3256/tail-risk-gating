@@ -25,12 +25,24 @@ app.add_middleware(
 )
 
 _CACHE: dict | None = None
+_CACHE_MTIME: float | None = None
+
+
+def _dashboard_artifact_mtime() -> float:
+    mtimes = []
+    for threshold in (2, 4, 6, 8):
+        path = ROOT_DIR / f"outputs/threshold_-{threshold}/wf_predictions_calibrated.csv"
+        if path.exists():
+            mtimes.append(path.stat().st_mtime)
+    return max(mtimes) if mtimes else 0.0
 
 
 def _get_data(force_refresh: bool = False) -> dict:
-    global _CACHE
-    if _CACHE is None or force_refresh:
+    global _CACHE, _CACHE_MTIME
+    artifact_mtime = _dashboard_artifact_mtime()
+    if _CACHE is None or force_refresh or _CACHE_MTIME != artifact_mtime:
         _CACHE = load_dashboard_data(ROOT_DIR)
+        _CACHE_MTIME = artifact_mtime
     return _CACHE
 
 

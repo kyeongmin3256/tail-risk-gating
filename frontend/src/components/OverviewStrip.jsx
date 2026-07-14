@@ -17,9 +17,9 @@ function signalLabel(probability, gateThreshold) {
   return 'Low Risk'
 }
 
-export default function OverviewStrip({ asOf, probability, gateThreshold, lossTolerance, policyLabel }) {
+export default function OverviewStrip({ asOf, probability, gateThreshold, policyLabel }) {
   return (
-    <section className="mt-5 border-b border-line pb-3">
+    <section className="mt-4 border-b border-line pb-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <h2 className="font-display text-base font-semibold tracking-tight text-ink">
           System Overview
@@ -34,8 +34,6 @@ export default function OverviewStrip({ asOf, probability, gateThreshold, lossTo
         <Metric label="Signal" value={signalLabel(probability, gateThreshold)} />
         <Divider />
         <Metric label="Gate" value={policyLabel} />
-        <Divider />
-        <Metric label="Loss Tol." value={`−${lossTolerance.toFixed(1)}%`} />
       </div>
     </section>
   )

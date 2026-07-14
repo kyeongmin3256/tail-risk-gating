@@ -17,9 +17,9 @@ body {
 .loss-tolerance-slider {
   -webkit-appearance: none;
   appearance: none;
-  height: 2px;
+  height: 6px;
   border-radius: 0;
-  background: #d9d4c8;
+  background: linear-gradient(to right, #1f4b6e var(--fill, 0%), #d9d4c8 var(--fill, 0%));
   outline: none;
   cursor: pointer;
 }
@@ -27,25 +27,65 @@ body {
 .loss-tolerance-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #1f4b6e;
   border: 2px solid #f3f1ec;
+  box-shadow: 0 0 0 1px #1f4b6e;
   cursor: grab;
+  transition: transform 0.15s ease;
 }
 
 .loss-tolerance-slider::-webkit-slider-thumb:active {
   cursor: grabbing;
+  transform: scale(1.15);
 }
 
 .loss-tolerance-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #1f4b6e;
   border: 2px solid #f3f1ec;
+  box-shadow: 0 0 0 1px #1f4b6e;
   cursor: grab;
+}
+
+.loss-tol-pill {
+  padding: 0.5rem 0.25rem;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px;
+  text-align: center;
+  border: 1px solid #d9d4c8;
+  background: #f3f1ec;
+  color: #5c5a55;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.loss-tol-pill:hover {
+  border-color: #1f4b6e;
+  color: #1f4b6e;
+}
+
+.loss-tol-pill-active {
+  background: #1f4b6e;
+  border-color: #1f4b6e;
+  color: #f3f1ec;
+  font-weight: 600;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 rgba(31, 75, 110, 0.25);
+}
+
+@keyframes tol-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+.animate-tol-pop {
+  animation: tol-pop 0.25s ease;
 }
 
 .recharts-cartesian-grid-horizontal line,

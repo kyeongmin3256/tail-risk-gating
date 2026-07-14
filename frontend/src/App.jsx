@@ -5,18 +5,20 @@ import RiskGauge from './components/RiskGauge'
 import ModelMetrics from './components/ModelMetrics'
 import ShapChart from './components/ShapChart'
 import BacktestPanel from './components/BacktestPanel'
-import { THRESHOLDS, dataByThreshold } from './data/mockData'
 import { interpolateDashboardData } from './utils/interpolateThreshold'
+
+const DEFAULT_THRESHOLDS = [2, 4, 6, 8]
 
 export default function App() {
   const [lossTolerance, setLossTolerance] = useState(4)
-  const [thresholds, setThresholds] = useState(THRESHOLDS)
+  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS)
   const [apiDataByThreshold, setApiDataByThreshold] = useState(null)
+  const [fallbackData, setFallbackData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState('')
 
   useEffect(() => {
-    const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+    const base = import.meta.env.VITE_API_BASE_URL || ''
     fetch(`${base}/api/dashboard/data`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -30,17 +32,30 @@ export default function App() {
           throw new Error('Invalid API payload')
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         setApiError(`API unavailable (${err.message}), using local mock data`)
+        const mock = await import('./data/mockData')
+        setThresholds(mock.THRESHOLDS)
+        setFallbackData(mock.dataByThreshold)
       })
       .finally(() => setLoading(false))
   }, [])
 
-  const source = apiDataByThreshold || dataByThreshold
+  const source = apiDataByThreshold || fallbackData
   const data = useMemo(
-    () => interpolateDashboardData(source, thresholds, lossTolerance),
+    () => (source ? interpolateDashboardData(source, thresholds, lossTolerance) : null),
     [source, thresholds, lossTolerance],
   )
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-paper">
+        <div className="mx-auto max-w-6xl px-6 py-16 font-mono text-sm text-muted">
+          Loading TailCast dashboard…
+        </div>
+      </div>
+    )
+  }
 
   if (!data) {
     return (
@@ -75,11 +90,10 @@ export default function App() {
           asOf={data.todayRisk.date}
           probability={data.todayRisk.probability}
           gateThreshold={policy.gateThreshold}
-          lossTolerance={lossTolerance}
           policyLabel={policy.label}
         />
 
-        <section className="mt-5 border border-line bg-[#EDEAE3]/30 p-4 sm:p-5">
+        <section className="mt-4 border border-line bg-[#EDEAE3]/30 p-3 sm:p-4">
           <RiskGauge
             data={data.todayRisk}
             gatingPolicy={policy}
@@ -90,12 +104,12 @@ export default function App() {
           />
         </section>
 
-        <section className="mt-5 border border-line bg-[#EDEAE3]/30 p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section className="mt-4 border border-line bg-[#EDEAE3]/30 p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ModelMetrics data={data.modelMetrics} />
           <ShapChart data={data.shapValues} />
         </section>
 
-        <section className="mt-5 border border-line bg-[#EDEAE3]/30 p-4 sm:p-5">
+        <section className="mt-4 border border-line bg-[#EDEAE3]/30 p-3 sm:p-4">
           <BacktestPanel data={data.backtestResults} />
         </section>
 
