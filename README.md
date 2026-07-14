@@ -51,12 +51,12 @@ TailCast is built to answer an operational question with a probabilistic one:
 <!-- METRICS:START -->
 ### Best full-sample profile — soft gate (-2% @ 20%) vs Short Straddle B&H
 
-Walk-forward evaluation on the short ATM SPY straddle proxy (~2,990 days).
+Walk-forward evaluation on the short ATM SPY straddle proxy (~3,045 days).
 
 | Metric | Ungated (B&H) | Gated | Change |
 |--------|---------------|-------|--------|
-| Sharpe | 1.94 | **2.03** | **+4.3%** |
-| CVaR (95%) | -3.31% | **-2.85%** | **14%** tail-risk reduction |
+| Sharpe | 2.07 | **2.16** | **+4.6%** |
+| CVaR (95%) | -3.29% | **-2.96%** | **10%** tail-risk reduction |
 
 ### Out-of-sample check — soft gate (-2% @ 20%, last 756 days)
 
