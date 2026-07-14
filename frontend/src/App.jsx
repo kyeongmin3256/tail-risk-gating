@@ -1,5 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Header from './components/Header'
+import OverviewStrip from './components/OverviewStrip'
 import RiskGauge from './components/RiskGauge'
 import ModelMetrics from './components/ModelMetrics'
 import ShapChart from './components/ShapChart'
@@ -43,15 +44,8 @@ export default function App() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-surface-900 noise-overlay relative">
-        <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
-          <Header />
-          <section className="mt-6">
-            <div className="card px-4 py-3 text-sm font-mono text-white/50">
-              No dashboard data available.
-            </div>
-          </section>
-        </div>
+      <div className="mx-auto max-w-6xl px-6 py-16 font-mono text-sm text-muted">
+        No dashboard data available.
       </div>
     )
   }
@@ -60,30 +54,35 @@ export default function App() {
     ? `Blending −${data.bracket.lower}% and −${data.bracket.upper}% models`
     : null
 
+  const policy = data.backtestResults?.gatingPolicy ?? {
+    gateThreshold: 0.15,
+    label: 'Hard Gate @ 15%',
+  }
+
   return (
-    <div className="min-h-screen bg-surface-900 noise-overlay relative">
-      <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
-        <Header />
+    <div className="min-h-screen bg-paper">
+      <div className="mx-auto max-w-6xl px-6 py-8 md:py-10">
+        <Header status={apiError ? 'Mock Data' : 'Operational'} statusKind={apiError ? 'warn' : 'ok'} />
 
         {loading && (
-          <section className="mt-4">
-            <div className="card px-4 py-3 text-xs font-mono text-white/40">
-              Loading dashboard data from API...
-            </div>
-          </section>
+          <p className="mt-4 font-mono text-xs text-muted">Loading dashboard data from API…</p>
         )}
         {!loading && apiError && (
-          <section className="mt-4">
-            <div className="card px-4 py-3 text-xs font-mono text-amber-300/80">
-              {apiError}
-            </div>
-          </section>
+          <p className="mt-4 font-mono text-xs text-warn">{apiError}</p>
         )}
 
-        <section className="mt-6">
+        <OverviewStrip
+          asOf={data.todayRisk.date}
+          probability={data.todayRisk.probability}
+          gateThreshold={policy.gateThreshold}
+          lossTolerance={lossTolerance}
+          policyLabel={policy.label}
+        />
+
+        <section className="mt-5 border border-line bg-[#EDEAE3]/30 p-4 sm:p-5">
           <RiskGauge
             data={data.todayRisk}
-            gatingPolicy={data.backtestResults?.gatingPolicy}
+            gatingPolicy={policy}
             lossTolerance={lossTolerance}
             onLossToleranceChange={setLossTolerance}
             thresholds={thresholds}
@@ -91,20 +90,18 @@ export default function App() {
           />
         </section>
 
-        <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section className="mt-5 border border-line bg-[#EDEAE3]/30 p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <ModelMetrics data={data.modelMetrics} />
           <ShapChart data={data.shapValues} />
         </section>
 
-        <section className="mt-6 mb-12">
+        <section className="mt-5 border border-line bg-[#EDEAE3]/30 p-4 sm:p-5">
           <BacktestPanel data={data.backtestResults} />
         </section>
 
-        <footer className="border-t border-white/5 py-6 text-center">
-          <p className="text-sm text-white/20 font-mono">
-            TailCast v2.0 · Walk-Forward LightGBM · −{lossTolerance.toFixed(1)}% loss tolerance
-            {blendHint ? ` · ${blendHint}` : ''} · Data through {data.todayRisk.date}
-          </p>
+        <footer className="mt-10 border-t border-line pt-4 font-mono text-[10px] uppercase tracking-label text-muted">
+          TailCast · Walk-Forward LightGBM · −{lossTolerance.toFixed(1)}% loss tolerance
+          {blendHint ? ` · ${blendHint}` : ''} · Data through {data.todayRisk.date}
         </footer>
       </div>
     </div>

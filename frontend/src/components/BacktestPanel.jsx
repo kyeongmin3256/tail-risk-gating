@@ -1,8 +1,35 @@
 import { useState } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
+
+const INK = '#1F4B6E'
+const BENCH = '#8B8680'
+const LINE = '#D9D4C8'
+const TICK = { fontSize: 9, fill: '#5C5A55', fontFamily: 'IBM Plex Mono' }
+const TOOLTIP_STYLE = {
+  background: '#F3F1EC',
+  border: '1px solid #D9D4C8',
+  fontFamily: 'IBM Plex Mono',
+  fontSize: 11,
+}
+
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border px-3 py-1 font-mono text-[11px] uppercase tracking-label transition ${
+        active
+          ? 'border-ink text-ink bg-ink/5'
+          : 'border-line text-muted hover:border-muted hover:text-ink-deep'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
 
 function StatCompare({ label, gated, baseline, format = 'pct', higherBetter = true }) {
   const formatVal = (v) => {
@@ -17,36 +44,20 @@ function StatCompare({ label, gated, baseline, format = 'pct', higherBetter = tr
   const gatedBetter = higherBetter ? gated > baseline : gated < baseline
 
   return (
-    <div className="py-3 border-b border-white/[0.04] last:border-0">
-      <p className="text-[10px] font-mono text-white/25 uppercase tracking-wider mb-2">{label}</p>
+    <div className="py-3 border-b border-line/80 last:border-0">
+      <p className="text-[10px] font-mono uppercase tracking-label text-muted mb-2">{label}</p>
       <div className="flex gap-4">
         <div className="flex-1">
-          <span className={`text-lg font-mono font-bold ${gatedBetter ? 'text-accent-cyan' : 'text-white/50'}`}>
+          <span className={`font-mono text-lg font-medium ${gatedBetter ? 'text-ink' : 'text-muted'}`}>
             {formatVal(gated)}
           </span>
-          {gatedBetter && <span className="text-[9px] text-accent-cyan ml-1.5">✓</span>}
         </div>
         <div className="flex-1 text-right">
-          <span className={`text-lg font-mono font-bold ${!gatedBetter ? 'text-accent-cyan' : 'text-white/50'}`}>
+          <span className={`font-mono text-lg font-medium ${!gatedBetter ? 'text-ink' : 'text-muted'}`}>
             {formatVal(baseline)}
           </span>
-          {!gatedBetter && <span className="text-[9px] text-accent-cyan ml-1.5">✓</span>}
         </div>
       </div>
-    </div>
-  )
-}
-
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-surface-700 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-[10px] font-mono text-white/40 mb-1">{label}</p>
-      {payload.map((entry, i) => (
-        <p key={i} className="text-xs font-mono" style={{ color: entry.color }}>
-          {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(3) : entry.value}
-        </p>
-      ))}
     </div>
   )
 }
@@ -62,105 +73,126 @@ export default function BacktestPanel({ data }) {
     gateThreshold: 0.15,
   }
 
+  const chartData = chart === 'equity' ? data.equityCurve : data.drawdownSeries
+
   return (
-    <div className="card p-6">
-      <div className="flex items-center justify-between mb-5">
+    <div>
+      <div className="flex items-baseline justify-between mb-5 gap-4">
         <div>
-          <h2 className="font-display text-sm font-semibold text-white/60 uppercase tracking-wider">
-            Backtest Results
-          </h2>
-          <p className="text-[10px] font-mono text-white/25 mt-1">
+          <h3 className="font-display text-base font-semibold text-ink">Backtest Results</h3>
+          <p className="text-[10px] font-mono text-muted mt-1">
             {policy.label} vs {policy.benchmarkLabel} · {bench.tradingDays} trading days · {gated.daysGated} low-exposure days
           </p>
         </div>
-        <div className="flex bg-white/[0.04] rounded-lg p-0.5">
-          {['equity', 'drawdown'].map((t) => (
-            <button
-              key={t}
-              onClick={() => setChart(t)}
-              className={`text-[11px] font-mono px-3 py-1 rounded-md transition-all ${
-                chart === t
-                  ? 'bg-white/10 text-white'
-                  : 'text-white/30 hover:text-white/50'
-              }`}
-            >
-              {t === 'equity' ? 'Equity Curve' : 'Drawdown'}
-            </button>
-          ))}
+        <div className="flex gap-2">
+          <TabButton active={chart === 'equity'} onClick={() => setChart('equity')}>Equity Curve</TabButton>
+          <TabButton active={chart === 'drawdown'} onClick={() => setChart('drawdown')}>Drawdown</TabButton>
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-8">
         <div className="flex-1 min-w-0">
-          <div className="h-[300px]">
-            {chart === 'equity' ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.equityCurve}>
-                  <defs>
-                    <linearGradient id="gatedFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#06d6d0" stopOpacity={0.12} />
-                      <stop offset="100%" stopColor="#06d6d0" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="ungatedFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#7a7d8e" stopOpacity={0.08} />
-                      <stop offset="100%" stopColor="#7a7d8e" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" interval={Math.floor(data.equityCurve.length / 6)} tick={{ fontSize: 10 }} />
-                  <YAxis tickFormatter={(v) => v.toFixed(1) + 'x'} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="ungated" stroke="#7a7d8e" strokeWidth={1.5} fill="url(#ungatedFill)"
-                    name={policy.benchmarkLabel} strokeDasharray="4 4" />
-                  <Area type="monotone" dataKey="gated" stroke="#06d6d0" strokeWidth={2} fill="url(#gatedFill)"
-                    name={policy.label} />
+          <div className="h-[300px] border border-line bg-[#EDEAE3]/30 px-1 py-2 sm:px-2">
+            <ResponsiveContainer width="100%" height="100%">
+              {chart === 'equity' ? (
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={LINE} strokeDasharray="3 6" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    interval={Math.floor(chartData.length / 6)}
+                    tick={TICK}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(v) => v.toFixed(1) + 'x'}
+                    tick={TICK}
+                    width={40}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Line
+                    type="monotone"
+                    dataKey="ungated"
+                    stroke={BENCH}
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    name={policy.benchmarkLabel}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="gated"
+                    stroke={INK}
+                    strokeWidth={1.75}
+                    dot={false}
+                    name={policy.label}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              ) : (
+                <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={LINE} strokeDasharray="3 6" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    interval={Math.floor(chartData.length / 6)}
+                    tick={TICK}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(v) => (v * 100).toFixed(0) + '%'}
+                    tick={TICK}
+                    width={40}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Area
+                    type="monotone"
+                    dataKey="ungated"
+                    stroke="#9B3A3A"
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
+                    fill="rgba(155, 58, 58, 0.06)"
+                    name={policy.benchmarkLabel}
+                    isAnimationActive={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="gated"
+                    stroke={INK}
+                    strokeWidth={1.75}
+                    fill="rgba(31, 75, 110, 0.06)"
+                    name={policy.label}
+                    isAnimationActive={false}
+                  />
                 </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.drawdownSeries}>
-                  <defs>
-                    <linearGradient id="ddGatedFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#06d6d0" stopOpacity={0} />
-                      <stop offset="100%" stopColor="#06d6d0" stopOpacity={0.15} />
-                    </linearGradient>
-                    <linearGradient id="ddUngatedFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#ff3b5c" stopOpacity={0} />
-                      <stop offset="100%" stopColor="#ff3b5c" stopOpacity={0.15} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" interval={Math.floor(data.drawdownSeries.length / 6)} tick={{ fontSize: 10 }} />
-                  <YAxis tickFormatter={(v) => (v * 100).toFixed(0) + '%'} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="ungated" stroke="#ff3b5c" strokeWidth={1.5} fill="url(#ddUngatedFill)"
-                    name={policy.benchmarkLabel} strokeDasharray="4 4" />
-                  <Area type="monotone" dataKey="gated" stroke="#06d6d0" strokeWidth={2} fill="url(#ddGatedFill)"
-                    name={policy.label} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
+              )}
+            </ResponsiveContainer>
           </div>
 
-          <div className="flex justify-center gap-6 mt-3">
+          <div className="flex justify-center gap-8 mt-4">
             <div className="flex items-center gap-2">
-              <span className="w-5 h-0.5 bg-accent-cyan rounded" />
-              <span className="text-[10px] font-mono text-white/40">{policy.label}</span>
+              <span className="w-5 h-0.5 bg-ink" />
+              <span className="text-[10px] font-mono text-muted">{policy.label}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-5 h-0.5 bg-white/30 rounded" style={{ borderTop: '1px dashed rgba(255,255,255,0.3)' }} />
-              <span className="text-[10px] font-mono text-white/40">{policy.benchmarkLabel}</span>
+              <span className="w-5 border-t border-dashed border-muted" />
+              <span className="text-[10px] font-mono text-muted">{policy.benchmarkLabel}</span>
             </div>
           </div>
         </div>
 
         <div className="lg:w-[260px] shrink-0">
-          <div className="flex gap-4 pb-2 border-b border-white/[0.08]">
+          <div className="flex gap-4 pb-2 border-b border-line">
             <div className="flex-1">
-              <span className="text-[10px] font-mono text-accent-cyan uppercase tracking-wider font-semibold">Gated</span>
+              <span className="text-[10px] font-mono uppercase tracking-label text-ink">Gated</span>
             </div>
             <div className="flex-1 text-right">
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider font-semibold">B&H</span>
+              <span className="text-[10px] font-mono uppercase tracking-label text-muted">B&H</span>
             </div>
           </div>
 
